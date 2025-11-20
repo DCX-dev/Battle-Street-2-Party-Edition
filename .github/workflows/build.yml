@@ -1,0 +1,90 @@
+name: Build Battle Street 2
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    name: Build for Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          pip install pyinstaller
+          # Find where main.py is and install requirements if present
+          $GAME_DIR = Get-ChildItem -Path . -Filter "main.py" -Recurse | Select-Object -First 1 -ExpandProperty DirectoryName
+          if (Test-Path "$GAME_DIR/requirements.txt") {
+            pip install -r "$GAME_DIR/requirements.txt"
+          }
+
+      - name: Build Executable
+        run: |
+          $GAME_DIR = Get-ChildItem -Path . -Filter "main.py" -Recurse | Select-Object -First 1 -ExpandProperty DirectoryName
+          Write-Host "Game Directory found at: $GAME_DIR"
+          cd $GAME_DIR
+          
+          # Create studio_logo if missing to prevent build error
+          if (-not (Test-Path "studio_logo")) { mkdir "studio_logo" }
+          
+          # Build with PyInstaller
+          # --onefile: Create a single .exe file
+          # --windowed: No console window when running
+          # --add-data: Include the studio_logo folder
+          pyinstaller main.py --onefile --windowed --name "BattleStreet2" --add-data "studio_logo;studio_logo"
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BattleStreet2-Windows
+          path: '**/dist/BattleStreet2.exe'
+
+  build-macos:
+    name: Build for MacOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          pip install pyinstaller
+          GAME_DIR=$(find . -name "main.py" -print -quit | xargs dirname)
+          if [ -f "$GAME_DIR/requirements.txt" ]; then
+            pip install -r "$GAME_DIR/requirements.txt"
+          fi
+
+      - name: Build Application
+        run: |
+          GAME_DIR=$(find . -name "main.py" -print -quit | xargs dirname)
+          echo "Game Directory found at: $GAME_DIR"
+          cd "$GAME_DIR"
+          
+          if [ ! -d "studio_logo" ]; then mkdir studio_logo; fi
+          
+          # Build with PyInstaller
+          # Note: Separator is ':' for Mac/Linux
+          pyinstaller main.py --onefile --windowed --name "BattleStreet2" --add-data "studio_logo:studio_logo"
+
+      - name: Upload MacOS Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BattleStreet2-MacOS
+          path: |
+            **/dist/BattleStreet2.app
+            **/dist/BattleStreet2
+
