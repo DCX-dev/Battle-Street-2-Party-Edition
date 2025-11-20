@@ -21,8 +21,8 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install pyinstaller
-          # Find where main.py is and install requirements if present
+          pip install pyinstaller pygame
+          # Find where main.py is and install requirements if present (just in case)
           $GAME_DIR = Get-ChildItem -Path . -Filter "main.py" -Recurse | Select-Object -First 1 -ExpandProperty DirectoryName
           if (Test-Path "$GAME_DIR/requirements.txt") {
             pip install -r "$GAME_DIR/requirements.txt"
@@ -38,10 +38,8 @@ jobs:
           if (-not (Test-Path "studio_logo")) { mkdir "studio_logo" }
           
           # Build with PyInstaller
-          # --onefile: Create a single .exe file
-          # --windowed: No console window when running
-          # --add-data: Include the studio_logo folder
-          pyinstaller main.py --onefile --windowed --name "BattleStreet2" --add-data "studio_logo;studio_logo"
+          # Explicitly add hidden import for pygame to be safe
+          pyinstaller main.py --onefile --windowed --name "BattleStreet2" --add-data "studio_logo;studio_logo" --hidden-import=pygame
 
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
@@ -62,7 +60,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install pyinstaller
+          pip install pyinstaller pygame
           GAME_FILE=$(find . -name "main.py" -print -quit)
           GAME_DIR=$(dirname "$GAME_FILE")
           if [ -f "$GAME_DIR/requirements.txt" ]; then
@@ -80,7 +78,7 @@ jobs:
           
           # Build with PyInstaller
           # Note: Separator is ':' for Mac/Linux
-          pyinstaller main.py --onefile --windowed --name "BattleStreet2" --add-data "studio_logo:studio_logo"
+          pyinstaller main.py --onefile --windowed --name "BattleStreet2" --add-data "studio_logo:studio_logo" --hidden-import=pygame
 
       - name: Upload MacOS Artifact
         uses: actions/upload-artifact@v4
