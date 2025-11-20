@@ -63,14 +63,16 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install pyinstaller
-          GAME_DIR=$(find . -name "main.py" -print -quit | xargs dirname)
+          GAME_FILE=$(find . -name "main.py" -print -quit)
+          GAME_DIR=$(dirname "$GAME_FILE")
           if [ -f "$GAME_DIR/requirements.txt" ]; then
             pip install -r "$GAME_DIR/requirements.txt"
           fi
 
       - name: Build Application
         run: |
-          GAME_DIR=$(find . -name "main.py" -print -quit | xargs dirname)
+          GAME_FILE=$(find . -name "main.py" -print -quit)
+          GAME_DIR=$(dirname "$GAME_FILE")
           echo "Game Directory found at: $GAME_DIR"
           cd "$GAME_DIR"
           
