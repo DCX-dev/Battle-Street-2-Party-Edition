@@ -71,8 +71,18 @@ class Game:
         self.splash_alpha = 255
         self.splash_image = self.load_studio_logo()
 
+    def resource_path(self, relative_path):
+        """ Get absolute path to resource, works for dev and for PyInstaller """
+        try:
+            # PyInstaller creates a temp folder and stores path in _MEIPASS
+            base_path = sys._MEIPASS
+        except Exception:
+            base_path = os.path.abspath(".")
+
+        return os.path.join(base_path, relative_path)
+
     def load_studio_logo(self):
-        logo_dir = "studio_logo"
+        logo_dir = self.resource_path("studio_logo")
         if os.path.exists(logo_dir):
             files = os.listdir(logo_dir)
             images = [f for f in files if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))]
