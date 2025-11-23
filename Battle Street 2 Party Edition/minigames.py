@@ -564,7 +564,7 @@ class DodgeballMinigame:
         self.reset()
         
     def reset(self):
-        self.player_rect = pygame.Rect(SCREEN_WIDTH - 60, SCREEN_HEIGHT//2 - 20, 40, 40) # Player on right
+        self.player_rect = pygame.Rect(SCREEN_WIDTH//2, SCREEN_HEIGHT//2, 40, 40) # Player in center
         self.speed = 5
         self.falling_objects = []
         self.spawn_timer = 0
@@ -576,14 +576,19 @@ class DodgeballMinigame:
     def handle_input(self, keys, joystick=None):
         if self.winner: return
         
-        dy = 0
+        dx, dy = 0, 0
+        if keys[pygame.K_LEFT]: dx = -1
+        if keys[pygame.K_RIGHT]: dx = 1
         if keys[pygame.K_UP]: dy = -1
         if keys[pygame.K_DOWN]: dy = 1
         
         if joystick:
-            axis = joystick.get_axis(1)
-            if abs(axis) > 0.1: dy = axis
+            ax = joystick.get_axis(0)
+            ay = joystick.get_axis(1)
+            if abs(ax) > 0.1: dx = ax
+            if abs(ay) > 0.1: dy = ay
             
+        self.player_rect.x += dx * self.speed
         self.player_rect.y += dy * self.speed
         self.player_rect.clamp_ip(self.screen.get_rect())
         
@@ -594,24 +599,46 @@ class DodgeballMinigame:
             
         self.spawn_timer += 1
         if self.spawn_timer > 20: # Spawn faster
-            y = random.randint(0, SCREEN_HEIGHT - 20)
-            self.falling_objects.append(pygame.Rect(-20, y, 20, 20)) # Spawn from left
+            # Spawn from ANY side
+            side = random.choice(['LEFT', 'RIGHT', 'TOP', 'BOTTOM'])
+            if side == 'LEFT':
+                self.falling_objects.append({'rect': pygame.Rect(-20, random.randint(0, SCREEN_HEIGHT), 20, 20), 'dx': 7, 'dy': 0})
+            elif side == 'RIGHT':
+                self.falling_objects.append({'rect': pygame.Rect(SCREEN_WIDTH, random.randint(0, SCREEN_HEIGHT), 20, 20), 'dx': -7, 'dy': 0})
+            elif side == 'TOP':
+                self.falling_objects.append({'rect': pygame.Rect(random.randint(0, SCREEN_WIDTH), -20, 20, 20), 'dx': 0, 'dy': 7})
+            elif side == 'BOTTOM':
+                self.falling_objects.append({'rect': pygame.Rect(random.randint(0, SCREEN_WIDTH), SCREEN_HEIGHT, 20, 20), 'dx': 0, 'dy': -7})
+            
             self.spawn_timer = 0
             
-        for obj in self.falling_objects[:]:
-            obj.x += 7 # Move right towards player
+        for obj_data in self.falling_objects[:]:
+            obj = obj_data['rect']
+            # Simple homing logic
+            if obj.centerx < self.player_rect.centerx: obj_data['dx'] += 0.1
+            elif obj.centerx > self.player_rect.centerx: obj_data['dx'] -= 0.1
+            if obj.centery < self.player_rect.centery: obj_data['dy'] += 0.1
+            elif obj.centery > self.player_rect.centery: obj_data['dy'] -= 0.1
+            
+            # Clamp speed
+            obj_data['dx'] = max(-8, min(8, obj_data['dx']))
+            obj_data['dy'] = max(-8, min(8, obj_data['dy']))
+
+            obj.x += int(obj_data['dx'])
+            obj.y += int(obj_data['dy'])
             
             if obj.colliderect(self.player_rect):
                 self.health -= 1
-                self.falling_objects.remove(obj)
-            elif obj.x > SCREEN_WIDTH:
-                self.falling_objects.remove(obj)
+                self.falling_objects.remove(obj_data)
+            # Remove if far off screen
+            elif obj.x < -50 or obj.x > SCREEN_WIDTH + 50 or obj.y < -50 or obj.y > SCREEN_HEIGHT + 50:
+                self.falling_objects.remove(obj_data)
                 self.score += 1
                 
         if self.health <= 0:
             self.winner = "Game Over! Score: " + str(self.score)
         
-        if self.score >= 20: # Win condition
+        if self.score >= 30: # Increased win condition slightly due to more spawning
              self.winner = "You Survived! Win!"
             
         return None
@@ -623,8 +650,8 @@ class DodgeballMinigame:
         pygame.draw.rect(self.screen, BLUE, self.player_rect)
         
         # Objects
-        for obj in self.falling_objects:
-            pygame.draw.circle(self.screen, RED, obj.center, 10)
+        for obj_data in self.falling_objects:
+            pygame.draw.circle(self.screen, RED, obj_data['rect'].center, 10)
             
         # HUD
         score_text = self.font.render(f"Score: {self.score}/20", True, WHITE)

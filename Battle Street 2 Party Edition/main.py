@@ -61,9 +61,9 @@ class Game:
         self.current_minigame = None
         
         # Multiplayer & Stats
-        self.two_player_mode = False
-        self.turn = 0 # 0 = P1, 1 = P2
-        self.stars = [0, 0]
+        self.num_players = 1 # Default 1 player
+        self.turn = 0 # 0 = P1, 1 = P2, 2 = P3, 3 = P4
+        self.stars = [0, 0, 0, 0] # Up to 4 players
         
         # Splash Data
         self.splash_timer = 0
@@ -130,31 +130,48 @@ class Game:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_SPACE:
                         self.state = GameState.BOARD
-                        self.two_player_mode = False
+                        self.num_players = 1
                         self.reset_game_data()
                     elif event.key == pygame.K_b:
                         self.state = GameState.BOARD
-                        self.two_player_mode = True
+                        self.num_players = 2
+                        self.reset_game_data()
+                    elif event.key == pygame.K_x:
+                        self.state = GameState.BOARD
+                        self.num_players = 3
+                        self.reset_game_data()
+                    elif event.key == pygame.K_y:
+                        self.state = GameState.BOARD
+                        self.num_players = 4
                         self.reset_game_data()
                         
                 elif event.type == pygame.JOYBUTTONDOWN:
-                    if event.button == 0: # A / Cross
+                    if event.button == 0: # A / Cross (1P)
                          self.state = GameState.BOARD
-                         self.two_player_mode = False
+                         self.num_players = 1
                          self.reset_game_data()
-                    elif event.button == 1: # B / Circle
+                    elif event.button == 1: # B / Circle (2P)
                          self.state = GameState.BOARD
-                         self.two_player_mode = True
+                         self.num_players = 2
+                         self.reset_game_data()
+                    # Map X and Y if controller allows, typically X=2, Y=3
+                    elif event.button == 2: # X / Square (3P)
+                         self.state = GameState.BOARD
+                         self.num_players = 3
+                         self.reset_game_data()
+                    elif event.button == 3: # Y / Triangle (4P)
+                         self.state = GameState.BOARD
+                         self.num_players = 4
                          self.reset_game_data()
 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     self.state = GameState.BOARD
-                    self.two_player_mode = False
+                    self.num_players = 1
                     self.reset_game_data()
             
             elif self.state == GameState.BOARD:
+                # Trigger Boss Fight if player has 14+ stars
                 if self.stars[self.turn] >= 14:
-                    # Trigger Boss Fight directly instead of rolling dice
                     if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
                          self.start_boss_fight()
                     elif event.type == pygame.JOYBUTTONDOWN and event.button == 0:
@@ -179,7 +196,7 @@ class Game:
     def reset_game_data(self):
         self.dice_value = 0
         self.dice_rect.center = (SCREEN_WIDTH//2, SCREEN_HEIGHT//2)
-        self.stars = [0, 0]
+        self.stars = [0, 0, 0, 0]
         self.turn = 0
 
     def start_boss_fight(self):
@@ -223,22 +240,33 @@ class Game:
             if self.current_minigame:
                 result = self.current_minigame.update()
                 if result:
-                    # Game Over logic
+                    # Boss Win (Game Over)
+                    if "DEFEATED THE BOSS" in result:
+                        self.winner = f"PLAYER {self.turn + 1} WINS THE GAME!"
+                        self.state = GameState.GAME_OVER
+                        return
+                    
+                    # Boss Loss
+                    if "BOSS WINS" in result:
+                        # Switch turn but don't reset stars, next player gets a chance if they have 14+ stars
+                        if self.num_players > 1:
+                            self.turn = (self.turn + 1) % self.num_players
+                        
+                        self.state = GameState.BOARD
+                        self.current_minigame = None
+                        self.dice_value = 0
+                        return
+
+                    # Mini-game Win logic
                     if "Player 1 Wins!" in result or "You Survived!" in result or "Time's Up!" in result or "Win" in result:
                         # Check specific win conditions per game if needed, but simplified:
                         # Assume standard win text implies player victory
                         if "Computer" not in result and "LOSE" not in result:
                              self.stars[self.turn] += 1
-                    
-                    # Boss Win
-                    if "DEFEATED THE BOSS" in result:
-                        self.winner = f"PLAYER {self.turn + 1} WINS THE GAME!"
-                        self.state = GameState.GAME_OVER
-                        return
 
-                    # Boss Loss or Mini-game end
-                    if self.two_player_mode:
-                        self.turn = 1 - self.turn # Switch turn
+                    # Mini-game end
+                    if self.num_players > 1:
+                        self.turn = (self.turn + 1) % self.num_players # Switch turn
                     
                     self.state = GameState.BOARD
                     self.current_minigame = None
@@ -319,8 +347,13 @@ class Game:
         if (pygame.time.get_ticks() // 500) % 2 == 0:
             start_text = self.small_font.render("Press A / Space for 1 Player", True, WHITE)
             p2_text = self.small_font.render("Press B for 2 Players", True, YELLOW)
-            self.screen.blit(start_text, (SCREEN_WIDTH//2 - start_text.get_width()//2, 400))
-            self.screen.blit(p2_text, (SCREEN_WIDTH//2 - p2_text.get_width()//2, 450))
+            p3_text = self.small_font.render("Press X for 3 Players", True, GREEN)
+            p4_text = self.small_font.render("Press Y for 4 Players", True, PURPLE)
+            
+            self.screen.blit(start_text, (SCREEN_WIDTH//2 - start_text.get_width()//2, 380))
+            self.screen.blit(p2_text, (SCREEN_WIDTH//2 - p2_text.get_width()//2, 420))
+            self.screen.blit(p3_text, (SCREEN_WIDTH//2 - p3_text.get_width()//2, 460))
+            self.screen.blit(p4_text, (SCREEN_WIDTH//2 - p4_text.get_width()//2, 500))
         
         if self.joysticks:
             joy_name = next(iter(self.joysticks.values())).get_name()
@@ -337,16 +370,20 @@ class Game:
         self.screen.fill((20, 20, 40))
         
         # Header
-        turn_text = self.font.render(f"Player {self.turn + 1}'s Turn", True, BLUE if self.turn == 0 else RED)
+        colors = [BLUE, RED, GREEN, YELLOW]
+        turn_text = self.font.render(f"Player {self.turn + 1}'s Turn", True, colors[self.turn])
         self.screen.blit(turn_text, (SCREEN_WIDTH//2 - turn_text.get_width()//2, 30))
         
         # Stars
-        p1_star_text = self.small_font.render(f"P1 Stars: {self.stars[0]}/14", True, BLUE)
-        self.screen.blit(p1_star_text, (50, 50))
+        colors = [BLUE, RED, GREEN, YELLOW]
+        p_star_text = self.small_font.render(f"P{self.turn+1} Stars: {self.stars[self.turn]}/14", True, colors[self.turn])
+        self.screen.blit(p_star_text, (50, 50))
         
-        if self.two_player_mode:
-            p2_star_text = self.small_font.render(f"P2 Stars: {self.stars[1]}/14", True, RED)
-            self.screen.blit(p2_star_text, (SCREEN_WIDTH - 250, 50))
+        # Show all players stars small in corners or list
+        if self.num_players > 1:
+            for i in range(self.num_players):
+                t = self.tiny_font.render(f"P{i+1}: {self.stars[i]}", True, colors[i])
+                self.screen.blit(t, (SCREEN_WIDTH - 100, 30 + i*20))
         
         # Boss Ready?
         if self.stars[self.turn] >= 14:
