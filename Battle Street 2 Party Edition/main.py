@@ -223,17 +223,17 @@ class Game:
                     self.state = GameState.MINIGAME
                     
                     if self.dice_value == 1:
-                        self.current_minigame = BattleMinigame(self.screen, self.font)
+                        self.current_minigame = BattleMinigame(self.screen, self.font, self.turn + 1)
                     elif self.dice_value == 2:
-                        self.current_minigame = RacingMinigame(self.screen, self.font)
+                        self.current_minigame = RacingMinigame(self.screen, self.font, self.turn + 1)
                     elif self.dice_value == 3:
-                        self.current_minigame = PongMinigame(self.screen, self.font)
+                        self.current_minigame = PongMinigame(self.screen, self.font, self.turn + 1)
                     elif self.dice_value == 4:
-                        self.current_minigame = DodgeballMinigame(self.screen, self.font)
+                        self.current_minigame = DodgeballMinigame(self.screen, self.font, self.turn + 1)
                     elif self.dice_value == 5:
-                        self.current_minigame = TargetMinigame(self.screen, self.font)
+                        self.current_minigame = TargetMinigame(self.screen, self.font, self.turn + 1)
                     elif self.dice_value == 6:
-                        self.current_minigame = CoinMinigame(self.screen, self.font)
+                        self.current_minigame = CoinMinigame(self.screen, self.font, self.turn + 1)
 
         
         elif self.state == GameState.MINIGAME:
@@ -343,17 +343,15 @@ class Game:
         self.screen.blit(title_text, (SCREEN_WIDTH//2 - title_text.get_width()//2, 150))
         self.screen.blit(subtitle_text, (SCREEN_WIDTH//2 - subtitle_text.get_width()//2, 230))
         
-        blink_speed = 30
-        if (pygame.time.get_ticks() // 500) % 2 == 0:
-            start_text = self.small_font.render("Press A / Space for 1 Player", True, WHITE)
-            p2_text = self.small_font.render("Press B for 2 Players", True, YELLOW)
-            p3_text = self.small_font.render("Press X for 3 Players", True, GREEN)
-            p4_text = self.small_font.render("Press Y for 4 Players", True, PURPLE)
-            
-            self.screen.blit(start_text, (SCREEN_WIDTH//2 - start_text.get_width()//2, 380))
-            self.screen.blit(p2_text, (SCREEN_WIDTH//2 - p2_text.get_width()//2, 420))
-            self.screen.blit(p3_text, (SCREEN_WIDTH//2 - p3_text.get_width()//2, 460))
-            self.screen.blit(p4_text, (SCREEN_WIDTH//2 - p4_text.get_width()//2, 500))
+        start_text = self.small_font.render("Press A / Space for 1 Player", True, WHITE)
+        p2_text = self.small_font.render("Press B for 2 Players", True, YELLOW)
+        p3_text = self.small_font.render("Press X for 3 Players", True, GREEN)
+        p4_text = self.small_font.render("Press Y for 4 Players", True, PURPLE)
+        
+        self.screen.blit(start_text, (SCREEN_WIDTH//2 - start_text.get_width()//2, 380))
+        self.screen.blit(p2_text, (SCREEN_WIDTH//2 - p2_text.get_width()//2, 420))
+        self.screen.blit(p3_text, (SCREEN_WIDTH//2 - p3_text.get_width()//2, 460))
+        self.screen.blit(p4_text, (SCREEN_WIDTH//2 - p4_text.get_width()//2, 500))
         
         if self.joysticks:
             joy_name = next(iter(self.joysticks.values())).get_name()
@@ -373,6 +371,9 @@ class Game:
         colors = [BLUE, RED, GREEN, YELLOW]
         turn_text = self.font.render(f"Player {self.turn + 1}'s Turn", True, colors[self.turn])
         self.screen.blit(turn_text, (SCREEN_WIDTH//2 - turn_text.get_width()//2, 30))
+        
+        mode_text = self.tiny_font.render(f"Current Mode: {self.num_players} Player(s)", True, WHITE)
+        self.screen.blit(mode_text, (10, 10))
         
         # Stars
         colors = [BLUE, RED, GREEN, YELLOW]

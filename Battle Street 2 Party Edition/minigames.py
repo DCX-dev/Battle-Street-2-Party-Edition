@@ -14,14 +14,16 @@ ORANGE = (255, 165, 0)
 GREY = (100, 100, 100)
 
 class BossFightMinigame:
-    def __init__(self, screen, font):
+    def __init__(self, screen, font, player_num=1):
         self.screen = screen
         self.font = font
+        self.player_num = player_num
+        self.colors = [BLUE, RED, GREEN, YELLOW]
         self.reset()
         
     def reset(self):
         self.player_rect = pygame.Rect(100, SCREEN_HEIGHT//2, 50, 50)
-        self.player_color = BLUE
+        self.player_color = self.colors[(self.player_num - 1) % 4]
         self.player_hp = 100
         self.player_speed = 5
         
@@ -203,15 +205,17 @@ class BossFightMinigame:
             self.screen.blit(win_text, (SCREEN_WIDTH//2 - win_text.get_width()//2, SCREEN_HEIGHT//2))
 
 class BattleMinigame:
-    def __init__(self, screen, font):
+    def __init__(self, screen, font, player_num=1):
         self.screen = screen
         self.font = font
+        self.player_num = player_num
+        self.colors = [BLUE, RED, GREEN, YELLOW]
         self.reset()
         
     def reset(self):
-        # Player 1 (Blue)
+        # Player 1 (Human)
         self.p1_rect = pygame.Rect(100, 300, 50, 50)
-        self.p1_color = BLUE
+        self.p1_color = self.colors[(self.player_num - 1) % 4]
         self.p1_health = 100
         self.p1_speed = 5
         
@@ -335,9 +339,11 @@ class BattleMinigame:
 
 
 class RacingMinigame:
-    def __init__(self, screen, font):
+    def __init__(self, screen, font, player_num=1):
         self.screen = screen
         self.font = font
+        self.player_num = player_num
+        self.colors = [BLUE, RED, GREEN, YELLOW]
         self.reset()
         
     def reset(self):
@@ -358,6 +364,7 @@ class RacingMinigame:
         self.countdown_text = "3"
         
         self.p1_boost_cooldown = 0
+        self.player_color = self.colors[(self.player_num - 1) % 4]
         
     def handle_input(self, keys, joystick=None):
         if self.winner or self.state == "COUNTDOWN": return
@@ -420,16 +427,16 @@ class RacingMinigame:
         # P2 relative position based on distance difference
         p2_rel_y = self.p2_y + (self.p1_distance - self.p2_distance)
         
-        pygame.draw.rect(self.screen, BLUE, (self.p1_x, self.p1_y, 40, 60))
+        pygame.draw.rect(self.screen, self.player_color, (self.p1_x, self.p1_y, 40, 60))
         
         # Draw P2 if on screen
         if 0 <= p2_rel_y <= SCREEN_HEIGHT:
-             pygame.draw.rect(self.screen, RED, (self.p2_x, p2_rel_y, 40, 60))
+             pygame.draw.rect(self.screen, RED if self.player_num != 2 else BLUE, (self.p2_x, p2_rel_y, 40, 60))
         # Indicator if off screen
         elif p2_rel_y > SCREEN_HEIGHT:
-             pygame.draw.polygon(self.screen, RED, [(self.p2_x, SCREEN_HEIGHT-10), (self.p2_x+40, SCREEN_HEIGHT-10), (self.p2_x+20, SCREEN_HEIGHT)])
+             pygame.draw.polygon(self.screen, RED if self.player_num != 2 else BLUE, [(self.p2_x, SCREEN_HEIGHT-10), (self.p2_x+40, SCREEN_HEIGHT-10), (self.p2_x+20, SCREEN_HEIGHT)])
         elif p2_rel_y < 0:
-             pygame.draw.polygon(self.screen, RED, [(self.p2_x, 10), (self.p2_x+40, 10), (self.p2_x+20, 0)])
+             pygame.draw.polygon(self.screen, RED if self.player_num != 2 else BLUE, [(self.p2_x, 10), (self.p2_x+40, 10), (self.p2_x+20, 0)])
 
         if self.state == "COUNTDOWN":
             count_surf = self.font.render(self.countdown_text, True, YELLOW)
@@ -438,7 +445,7 @@ class RacingMinigame:
         # Distance bar
         pygame.draw.rect(self.screen, BLACK, (SCREEN_WIDTH - 30, 50, 20, SCREEN_HEIGHT - 100))
         progress = self.p1_distance / self.track_length
-        pygame.draw.rect(self.screen, BLUE, (SCREEN_WIDTH - 30, SCREEN_HEIGHT - 50 - (progress * (SCREEN_HEIGHT - 100)), 20, 10))
+        pygame.draw.rect(self.screen, self.player_color, (SCREEN_WIDTH - 30, SCREEN_HEIGHT - 50 - (progress * (SCREEN_HEIGHT - 100)), 20, 10))
 
         if self.winner:
             win_text = self.font.render(self.winner, True, WHITE)
@@ -446,14 +453,18 @@ class RacingMinigame:
 
 
 class PongMinigame:
-    def __init__(self, screen, font):
+    def __init__(self, screen, font, player_num=1):
         self.screen = screen
         self.font = font
+        self.player_num = player_num
+        self.colors = [BLUE, RED, GREEN, YELLOW]
         self.reset()
         
     def reset(self):
         self.paddle_h = 80
         self.paddle_w = 15
+        
+        self.player_color = self.colors[(self.player_num - 1) % 4]
         
         self.p1_y = SCREEN_HEIGHT//2 - self.paddle_h//2
         self.p2_y = SCREEN_HEIGHT//2 - self.paddle_h//2
@@ -541,8 +552,8 @@ class PongMinigame:
         pygame.draw.line(self.screen, WHITE, (SCREEN_WIDTH//2, 0), (SCREEN_WIDTH//2, SCREEN_HEIGHT), 2)
         
         # Paddles
-        pygame.draw.rect(self.screen, BLUE, (50, self.p1_y, self.paddle_w, self.paddle_h))
-        pygame.draw.rect(self.screen, RED, (SCREEN_WIDTH - 50 - self.paddle_w, self.p2_y, self.paddle_w, self.paddle_h))
+        pygame.draw.rect(self.screen, self.player_color, (50, self.p1_y, self.paddle_w, self.paddle_h))
+        pygame.draw.rect(self.screen, RED if self.player_num != 2 else BLUE, (SCREEN_WIDTH - 50 - self.paddle_w, self.p2_y, self.paddle_w, self.paddle_h))
         
         # Ball
         pygame.draw.circle(self.screen, YELLOW, (int(self.ball_x), int(self.ball_y)), 10)
@@ -558,13 +569,16 @@ class PongMinigame:
             self.screen.blit(win_text, (SCREEN_WIDTH//2 - win_text.get_width()//2, SCREEN_HEIGHT//2))
 
 class DodgeballMinigame:
-    def __init__(self, screen, font):
+    def __init__(self, screen, font, player_num=1):
         self.screen = screen
         self.font = font
+        self.player_num = player_num
+        self.colors = [BLUE, RED, GREEN, YELLOW]
         self.reset()
         
     def reset(self):
         self.player_rect = pygame.Rect(SCREEN_WIDTH//2, SCREEN_HEIGHT//2, 40, 40) # Player in center
+        self.player_color = self.colors[(self.player_num - 1) % 4]
         self.speed = 5
         self.falling_objects = []
         self.spawn_timer = 0
@@ -647,7 +661,7 @@ class DodgeballMinigame:
         self.screen.fill((20, 0, 20))
         
         # Player
-        pygame.draw.rect(self.screen, BLUE, self.player_rect)
+        pygame.draw.rect(self.screen, self.player_color, self.player_rect)
         
         # Objects
         for obj_data in self.falling_objects:
@@ -664,9 +678,12 @@ class DodgeballMinigame:
             self.screen.blit(win_text, (SCREEN_WIDTH//2 - win_text.get_width()//2, SCREEN_HEIGHT//2))
 
 class TargetMinigame:
-    def __init__(self, screen, font):
+    def __init__(self, screen, font, player_num=1):
         self.screen = screen
         self.font = font
+        self.player_num = player_num
+        # Crosshair color doesn't need to change much, maybe border?
+        self.colors = [BLUE, RED, GREEN, YELLOW]
         self.reset()
         
     def reset(self):
@@ -752,13 +769,16 @@ class TargetMinigame:
             self.screen.blit(win_text, (SCREEN_WIDTH//2 - win_text.get_width()//2, SCREEN_HEIGHT//2))
 
 class CoinMinigame:
-    def __init__(self, screen, font):
+    def __init__(self, screen, font, player_num=1):
         self.screen = screen
         self.font = font
+        self.player_num = player_num
+        self.colors = [BLUE, RED, GREEN, YELLOW]
         self.reset()
         
     def reset(self):
         self.player_rect = pygame.Rect(SCREEN_WIDTH//2, SCREEN_HEIGHT//2, 40, 40)
+        self.player_color = self.colors[(self.player_num - 1) % 4]
         self.coins = []
         self.score = 0
         self.timer = 600 # 10 seconds
@@ -817,7 +837,7 @@ class CoinMinigame:
         self.screen.fill((0, 100, 100))
         
         # Player
-        pygame.draw.rect(self.screen, ORANGE, self.player_rect)
+        pygame.draw.rect(self.screen, self.player_color, self.player_rect)
         
         # Coins
         for c in self.coins:
