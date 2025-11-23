@@ -27,7 +27,7 @@ class BossFightMinigame:
         
         self.boss_rect = pygame.Rect(SCREEN_WIDTH - 150, SCREEN_HEIGHT//2 - 75, 150, 150)
         self.boss_color = (100, 0, 0) # Dark Red
-        self.boss_hp = 500
+        self.boss_hp = 300 # Reduced from 500
         self.boss_state = "IDLE"
         self.boss_timer = 0
         
@@ -68,7 +68,7 @@ class BossFightMinigame:
             if dist < 150: # Close range: Fist
                 attack_rect = pygame.Rect(self.player_rect.right, self.player_rect.y, 60, 50)
                 if attack_rect.colliderect(self.boss_rect):
-                    self.boss_hp -= 5 # Fist damage
+                    self.boss_hp -= 15 # Fist damage increased (was 5)
                 self.player_attack_cooldown = 20
             else: # Long range: Fireball
                 self.player_projectiles.append(pygame.Rect(self.player_rect.right, self.player_rect.centery - 10, 20, 20))
@@ -152,7 +152,7 @@ class BossFightMinigame:
         for pp in self.player_projectiles[:]:
             pp.x += 10 # Move right
             if pp.colliderect(self.boss_rect):
-                self.boss_hp -= 2 # Fireball damage
+                self.boss_hp -= 8 # Fireball damage increased (was 2)
                 self.player_projectiles.remove(pp)
             elif pp.x > SCREEN_WIDTH:
                 self.player_projectiles.remove(pp)
@@ -341,43 +341,57 @@ class RacingMinigame:
         self.reset()
         
     def reset(self):
-        self.p1_y = 400
+        self.p1_y = 400 # Will be used for visual position
         self.p2_y = 400
         self.p1_x = 200
         self.p2_x = 500
-        self.finish_line_y = 50
+        
+        self.track_length = 5000 # Distance to travel
+        self.p1_distance = 0
+        self.p2_distance = 0
+        
         self.winner = None
         self.game_over_timer = 0
         
+        self.state = "COUNTDOWN"
+        self.countdown_timer = 180 # 3 seconds
+        self.countdown_text = "3"
+        
+        self.p1_boost_cooldown = 0
+        
     def handle_input(self, keys, joystick=None):
-        if self.winner: return
+        if self.winner or self.state == "COUNTDOWN": return
         
-        # Mash button/key to move forward
-        # We need a 'pressed this frame' check, but for simplicity, we'll just check rapid polling or use a cooldown
-        # Ideally, main.py handles 'just pressed', but here we'll just add speed per frame if held, but slower
-        # To make it mash-y, we'd need 'just_pressed' passed in. 
-        # Let's make it "hold to move but slow, or mash to move fast".
-        # For simplicity in this structure, let's just make it HOLD to run for now, or rely on main loop.
-        
-        # Actually, let's just make it speed based on holding for now to ensure it works easily
         speed = 5
         
+        # Boost mechanism (e.g. random chance or just button mash speed)
+        # Here we keep it simple: Button mash speed
+        
         if keys[pygame.K_SPACE]:
-            self.p1_y -= speed
+            self.p1_distance += speed
         elif joystick and joystick.get_button(0):
-            self.p1_y -= speed
+            self.p1_distance += speed
             
     def update(self):
         if self.winner:
             self.game_over_timer += 1
             return self.winner if self.game_over_timer > 180 else None
             
-        # AI Movement (random speed)
-        self.p2_y -= random.randint(3, 6)
+        if self.state == "COUNTDOWN":
+            self.countdown_timer -= 1
+            if self.countdown_timer > 120: self.countdown_text = "3"
+            elif self.countdown_timer > 60: self.countdown_text = "2"
+            elif self.countdown_timer > 0: self.countdown_text = "1"
+            else: 
+                self.state = "RACE"
+            return None
+            
+        # AI Movement
+        self.p2_distance += random.randint(3, 6)
         
-        if self.p1_y <= self.finish_line_y:
+        if self.p1_distance >= self.track_length:
             self.winner = "Player 1 Wins!"
-        elif self.p2_y <= self.finish_line_y:
+        elif self.p2_distance >= self.track_length:
             self.winner = "Computer Wins!"
             
         return None
@@ -385,16 +399,47 @@ class RacingMinigame:
     def draw(self):
         self.screen.fill((30, 100, 30)) # Grass
         
+        # Scrolling Track Effect
+        # We use modulo to scroll lines
+        offset = (self.p1_distance % 100)
+        
         # Track
         pygame.draw.rect(self.screen, (100, 100, 100), (150, 0, 500, SCREEN_HEIGHT))
         
-        # Finish Line
-        pygame.draw.rect(self.screen, WHITE, (150, self.finish_line_y, 500, 10))
+        # Lane markers
+        for i in range(-1, SCREEN_HEIGHT // 50 + 2):
+            y_pos = i * 50 + offset
+            pygame.draw.rect(self.screen, WHITE, (400, y_pos, 10, 30))
+            
+        # Finish Line (only if close)
+        if self.track_length - self.p1_distance < SCREEN_HEIGHT:
+            finish_y = self.track_length - self.p1_distance
+            pygame.draw.rect(self.screen, WHITE, (150, finish_y, 500, 20)) # Finish line relative to P1
         
-        # Cars/Runners
+        # Cars/Runners (Static vertical position)
+        # P2 relative position based on distance difference
+        p2_rel_y = self.p2_y + (self.p1_distance - self.p2_distance)
+        
         pygame.draw.rect(self.screen, BLUE, (self.p1_x, self.p1_y, 40, 60))
-        pygame.draw.rect(self.screen, RED, (self.p2_x, self.p2_y, 40, 60))
         
+        # Draw P2 if on screen
+        if 0 <= p2_rel_y <= SCREEN_HEIGHT:
+             pygame.draw.rect(self.screen, RED, (self.p2_x, p2_rel_y, 40, 60))
+        # Indicator if off screen
+        elif p2_rel_y > SCREEN_HEIGHT:
+             pygame.draw.polygon(self.screen, RED, [(self.p2_x, SCREEN_HEIGHT-10), (self.p2_x+40, SCREEN_HEIGHT-10), (self.p2_x+20, SCREEN_HEIGHT)])
+        elif p2_rel_y < 0:
+             pygame.draw.polygon(self.screen, RED, [(self.p2_x, 10), (self.p2_x+40, 10), (self.p2_x+20, 0)])
+
+        if self.state == "COUNTDOWN":
+            count_surf = self.font.render(self.countdown_text, True, YELLOW)
+            self.screen.blit(count_surf, (SCREEN_WIDTH//2 - count_surf.get_width()//2, SCREEN_HEIGHT//2))
+        
+        # Distance bar
+        pygame.draw.rect(self.screen, BLACK, (SCREEN_WIDTH - 30, 50, 20, SCREEN_HEIGHT - 100))
+        progress = self.p1_distance / self.track_length
+        pygame.draw.rect(self.screen, BLUE, (SCREEN_WIDTH - 30, SCREEN_HEIGHT - 50 - (progress * (SCREEN_HEIGHT - 100)), 20, 10))
+
         if self.winner:
             win_text = self.font.render(self.winner, True, WHITE)
             self.screen.blit(win_text, (SCREEN_WIDTH//2 - win_text.get_width()//2, SCREEN_HEIGHT//2))
@@ -548,13 +593,21 @@ class DodgeballMinigame:
             return self.winner if self.game_over_timer > 180 else None
             
         self.spawn_timer += 1
-        if self.spawn_timer > 30: # Spawn every 30 frames
+        if self.spawn_timer > 25: # Spawn more frequently (was 30)
             x = random.randint(0, SCREEN_WIDTH - 20)
             self.falling_objects.append(pygame.Rect(x, -20, 20, 20))
             self.spawn_timer = 0
             
         for obj in self.falling_objects[:]:
-            obj.y += 5
+            # Move balls towards player slightly (homing) or just randomly spread
+            # Simple fix: Add horizontal movement
+            if obj.x < self.player_rect.x:
+                obj.x += random.randint(0, 2)
+            elif obj.x > self.player_rect.x:
+                obj.x -= random.randint(0, 2)
+                
+            obj.y += 6 # Faster falling speed (was 5)
+            
             if obj.colliderect(self.player_rect):
                 self.health -= 1
                 self.falling_objects.remove(obj)
