@@ -564,7 +564,7 @@ class DodgeballMinigame:
         self.reset()
         
     def reset(self):
-        self.player_rect = pygame.Rect(SCREEN_WIDTH//2, SCREEN_HEIGHT - 60, 40, 40)
+        self.player_rect = pygame.Rect(SCREEN_WIDTH - 60, SCREEN_HEIGHT//2 - 20, 40, 40) # Player on right
         self.speed = 5
         self.falling_objects = []
         self.spawn_timer = 0
@@ -576,15 +576,15 @@ class DodgeballMinigame:
     def handle_input(self, keys, joystick=None):
         if self.winner: return
         
-        dx = 0
-        if keys[pygame.K_LEFT]: dx = -1
-        if keys[pygame.K_RIGHT]: dx = 1
+        dy = 0
+        if keys[pygame.K_UP]: dy = -1
+        if keys[pygame.K_DOWN]: dy = 1
         
         if joystick:
-            axis = joystick.get_axis(0)
-            if abs(axis) > 0.1: dx = axis
+            axis = joystick.get_axis(1)
+            if abs(axis) > 0.1: dy = axis
             
-        self.player_rect.x += dx * self.speed
+        self.player_rect.y += dy * self.speed
         self.player_rect.clamp_ip(self.screen.get_rect())
         
     def update(self):
@@ -593,25 +593,18 @@ class DodgeballMinigame:
             return self.winner if self.game_over_timer > 180 else None
             
         self.spawn_timer += 1
-        if self.spawn_timer > 25: # Spawn more frequently (was 30)
-            x = random.randint(0, SCREEN_WIDTH - 20)
-            self.falling_objects.append(pygame.Rect(x, -20, 20, 20))
+        if self.spawn_timer > 20: # Spawn faster
+            y = random.randint(0, SCREEN_HEIGHT - 20)
+            self.falling_objects.append(pygame.Rect(-20, y, 20, 20)) # Spawn from left
             self.spawn_timer = 0
             
         for obj in self.falling_objects[:]:
-            # Move balls towards player slightly (homing) or just randomly spread
-            # Simple fix: Add horizontal movement
-            if obj.x < self.player_rect.x:
-                obj.x += random.randint(0, 2)
-            elif obj.x > self.player_rect.x:
-                obj.x -= random.randint(0, 2)
-                
-            obj.y += 6 # Faster falling speed (was 5)
+            obj.x += 7 # Move right towards player
             
             if obj.colliderect(self.player_rect):
                 self.health -= 1
                 self.falling_objects.remove(obj)
-            elif obj.y > SCREEN_HEIGHT:
+            elif obj.x > SCREEN_WIDTH:
                 self.falling_objects.remove(obj)
                 self.score += 1
                 
