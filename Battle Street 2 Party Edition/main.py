@@ -2,7 +2,8 @@ import pygame
 import sys
 import random
 import os
-from minigames import BattleMinigame, RacingMinigame, PongMinigame, DodgeballMinigame, TargetMinigame, CoinMinigame, BossFightMinigame
+import json
+from minigames import BattleMinigame, RacingMinigame, PongMinigame, DodgeballMinigame, TargetMinigame, CoinMinigame, BossFightMinigame, SnakeMinigame, SpaceShooterMinigame
 
 # Constants
 SCREEN_WIDTH = 800
@@ -54,10 +55,20 @@ class Game:
         # Game Data
         self.dice_value = 0
         self.rolling_dice = False
-        self.dice_timer = 0
+        self.dice_stopped = False # Waiting for animation/confirmation
+        self.dice_jump_timer = 0
         self.dice_rect = pygame.Rect(SCREEN_WIDTH//2 - 50, SCREEN_HEIGHT//2 - 50, 100, 100)
+        self.expansion_enabled = False
+        self.load_expansion_config()
         
-        # Minigame
+    def load_expansion_config(self):
+        try:
+            with open(self.resource_path("expansion.json"), "r") as f:
+                config = json.load(f)
+                self.expansion_enabled = config.get("enable_expansion_pack", False)
+        except Exception as e:
+            print(f"Could not load expansion config: {e}")
+            self.expansion_enabled = False
         self.current_minigame = None
         
         # Multiplayer & Stats
@@ -98,6 +109,17 @@ class Game:
                     pass
         return None
         
+        # Continuous input for minigame
+        if self.state == GameState.MINIGAME and self.current_minigame:
+            # Re-fetch input for minigame loop if needed, but handled in update usually?
+            # Actually handle_input calls current_minigame.handle_input right here.
+            # But keys/active_joystick were defined in local scope of handle_input earlier.
+            # Wait, I moved logic into update() which broke scope? No, I edited update().
+            # Ah, the linter error says L220. Let's check where that is.
+            # It seems I used keys/active_joystick in update() but they are local to handle_input.
+            # I should move the dice stop logic to handle_input or fetch keys in update.
+            pass
+
     def handle_input(self):
         keys = pygame.key.get_pressed()
         active_joystick = next(iter(self.joysticks.values())) if self.joysticks else None
@@ -179,15 +201,33 @@ class Game:
                     return
 
                 if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_SPACE and not self.rolling_dice:
-                        self.start_dice_roll()
+                    if (event.key == pygame.K_SPACE or event.key == pygame.K_a):
+                        if not self.rolling_dice:
+                            self.start_dice_roll()
+                        elif not self.dice_stopped:
+                            self.stop_dice_roll()
+                            
                 elif event.type == pygame.JOYBUTTONDOWN:
                     # Button 0 is usually 'A' or 'X'
-                    if event.button == 0 and not self.rolling_dice:
-                        self.start_dice_roll()
+                    if event.button == 0:
+                        if not self.rolling_dice:
+                            self.start_dice_roll()
+                        elif not self.dice_stopped:
+                            self.stop_dice_roll()
+                            
                 elif event.type == pygame.MOUSEBUTTONDOWN:
-                    if not self.rolling_dice and self.dice_rect.collidepoint(event.pos):
-                        self.start_dice_roll()
+                    if self.dice_rect.collidepoint(event.pos):
+                        if not self.rolling_dice:
+                            self.start_dice_roll()
+                        elif not self.dice_stopped:
+                            self.stop_dice_roll()
+        # Continuous input for minigame
+        if self.state == GameState.MINIGAME and self.current_minigame:
+            self.current_minigame.handle_input(keys, active_joystick)
+
+    def stop_dice_roll(self):
+        self.dice_stopped = True
+        self.dice_jump_timer = 0
         
         # Continuous input for minigame
         if self.state == GameState.MINIGAME and self.current_minigame:
@@ -198,14 +238,19 @@ class Game:
         self.dice_rect.center = (SCREEN_WIDTH//2, SCREEN_HEIGHT//2)
         self.stars = [0, 0, 0, 0]
         self.turn = 0
+        self.rolling_dice = False
+        self.dice_stopped = False
+        self.dice_jump_timer = 0
 
     def start_boss_fight(self):
         self.state = GameState.MINIGAME
-        self.current_minigame = BossFightMinigame(self.screen, self.font)
+        self.current_minigame = BossFightMinigame(self.screen, self.font, self.turn + 1)
 
     def start_dice_roll(self):
         self.rolling_dice = True
-        self.dice_timer = 60 # Frames to roll
+        self.dice_timer = 0 # Used for animation frame counter now
+        self.dice_stopped = False
+        self.dice_jump_timer = 0
         
     def update(self):
         if self.state == GameState.SPLASH:
@@ -215,25 +260,55 @@ class Game:
         
         elif self.state == GameState.BOARD:
             if self.rolling_dice:
-                self.dice_value = random.randint(1, 6)
-                self.dice_timer -= 1
-                if self.dice_timer <= 0:
-                    self.rolling_dice = False
-                    # Start Minigame based on Dice Value
-                    self.state = GameState.MINIGAME
+                if not self.dice_stopped:
+                    # Animate dice rolling rapidly
+                    self.dice_timer += 1
+                    if self.dice_timer % 5 == 0: # Change face every 5 frames
+                        max_val = 8 if self.expansion_enabled else 6
+                        self.dice_value = random.randint(1, max_val)
+                        
+                    # Check for stop input
+                    keys = pygame.key.get_pressed()
+                    stop_pressed = keys[pygame.K_SPACE] or keys[pygame.K_a] # Keyboard
                     
-                    if self.dice_value == 1:
-                        self.current_minigame = BattleMinigame(self.screen, self.font, self.turn + 1)
-                    elif self.dice_value == 2:
-                        self.current_minigame = RacingMinigame(self.screen, self.font, self.turn + 1)
-                    elif self.dice_value == 3:
-                        self.current_minigame = PongMinigame(self.screen, self.font, self.turn + 1)
-                    elif self.dice_value == 4:
-                        self.current_minigame = DodgeballMinigame(self.screen, self.font, self.turn + 1)
-                    elif self.dice_value == 5:
-                        self.current_minigame = TargetMinigame(self.screen, self.font, self.turn + 1)
-                    elif self.dice_value == 6:
-                        self.current_minigame = CoinMinigame(self.screen, self.font, self.turn + 1)
+                    # Controller input
+                    if self.joysticks:
+                        for joy in self.joysticks.values():
+                            if joy.get_button(0): # A button
+                                stop_pressed = True
+                                break
+                    
+                    # Mouse input is handled in handle_input via flag if needed, but easier to check here?
+                    # Actually handle_input sets flags usually. Let's rely on handle_input setting a flag or calling a method?
+                    # The current design calls start_dice_roll on press. We need a "stop_dice_roll" action.
+                    # Let's modify handle_input to handle the stop.
+                    pass
+                else:
+                    # Dice Jump Animation
+                    self.dice_jump_timer += 1
+                    if self.dice_jump_timer > 30: # Animation done
+                        self.rolling_dice = False
+                        self.dice_stopped = False
+                        # Start Minigame
+                        self.state = GameState.MINIGAME
+                        
+                        if self.dice_value == 1:
+                            self.current_minigame = BattleMinigame(self.screen, self.font, self.turn + 1)
+                        elif self.dice_value == 2:
+                            self.current_minigame = RacingMinigame(self.screen, self.font, self.turn + 1)
+                        elif self.dice_value == 3:
+                            self.current_minigame = PongMinigame(self.screen, self.font, self.turn + 1)
+                        elif self.dice_value == 4:
+                            self.current_minigame = DodgeballMinigame(self.screen, self.font, self.turn + 1)
+                        elif self.dice_value == 5:
+                            self.current_minigame = TargetMinigame(self.screen, self.font, self.turn + 1)
+                        elif self.dice_value == 6:
+                            self.current_minigame = CoinMinigame(self.screen, self.font, self.turn + 1)
+                        # Expansion Games
+                        elif self.dice_value == 7:
+                            self.current_minigame = SnakeMinigame(self.screen, self.font, self.turn + 1)
+                        elif self.dice_value == 8:
+                            self.current_minigame = SpaceShooterMinigame(self.screen, self.font, self.turn + 1)
 
         
         elif self.state == GameState.MINIGAME:
@@ -404,24 +479,42 @@ class Game:
         
         # Draw Dice
         # Use self.dice_rect which is now initialized in __init__
-        pygame.draw.rect(self.screen, WHITE, self.dice_rect, border_radius=10)
-        pygame.draw.rect(self.screen, BLACK, self.dice_rect, 4, border_radius=10)
+        dice_y_offset = 0
+        if self.dice_stopped and self.rolling_dice:
+            # Simple jump animation: up then down
+            if self.dice_jump_timer < 15:
+                dice_y_offset = -self.dice_jump_timer * 2
+            else:
+                dice_y_offset = -(30 - self.dice_jump_timer) * 2
+        
+        draw_rect = self.dice_rect.copy()
+        draw_rect.y += dice_y_offset
+        
+        pygame.draw.rect(self.screen, WHITE, draw_rect, border_radius=10)
+        pygame.draw.rect(self.screen, BLACK, draw_rect, 4, border_radius=10)
         
         if self.dice_value > 0:
             # Draw dots based on number
             color = BLACK
-            cx, cy = self.dice_rect.centerx, self.dice_rect.centery
-            if self.dice_value in [1, 3, 5]:
-                pygame.draw.circle(self.screen, color, (cx, cy), 10)
-            if self.dice_value in [2, 3, 4, 5, 6]:
-                pygame.draw.circle(self.screen, color, (cx - 25, cy - 25), 10)
-                pygame.draw.circle(self.screen, color, (cx + 25, cy + 25), 10)
-            if self.dice_value in [4, 5, 6]:
-                pygame.draw.circle(self.screen, color, (cx + 25, cy - 25), 10)
-                pygame.draw.circle(self.screen, color, (cx - 25, cy + 25), 10)
-            if self.dice_value == 6:
-                pygame.draw.circle(self.screen, color, (cx - 25, cy), 10)
-                pygame.draw.circle(self.screen, color, (cx + 25, cy), 10)
+            cx, cy = draw_rect.centerx, draw_rect.centery
+            
+            # Dice logic for 1-6 is standard
+            if self.dice_value <= 6:
+                if self.dice_value in [1, 3, 5]:
+                    pygame.draw.circle(self.screen, color, (cx, cy), 10)
+                if self.dice_value in [2, 3, 4, 5, 6]:
+                    pygame.draw.circle(self.screen, color, (cx - 25, cy - 25), 10)
+                    pygame.draw.circle(self.screen, color, (cx + 25, cy + 25), 10)
+                if self.dice_value in [4, 5, 6]:
+                    pygame.draw.circle(self.screen, color, (cx + 25, cy - 25), 10)
+                    pygame.draw.circle(self.screen, color, (cx - 25, cy + 25), 10)
+                if self.dice_value == 6:
+                    pygame.draw.circle(self.screen, color, (cx - 25, cy), 10)
+                    pygame.draw.circle(self.screen, color, (cx + 25, cy), 10)
+            else:
+                # Custom numbers for 7, 8 etc
+                text_surf = self.font.render(str(self.dice_value), True, BLACK)
+                self.screen.blit(text_surf, (cx - text_surf.get_width()//2, cy - text_surf.get_height()//2))
             
             # Show which game
             game_name = ""
@@ -431,9 +524,37 @@ class Game:
             elif self.dice_value == 4: game_name = "DODGEBALL"
             elif self.dice_value == 5: game_name = "TARGET PRACTICE"
             elif self.dice_value == 6: game_name = "COIN COLLECTOR"
+            elif self.dice_value == 7: game_name = "SNAKE"
+            elif self.dice_value == 8: game_name = "SPACE SHOOTER"
             
             name_text = self.small_font.render(game_name, True, YELLOW)
             self.screen.blit(name_text, (SCREEN_WIDTH//2 - name_text.get_width()//2, SCREEN_HEIGHT//2 + 80))
+
+        # Draw Player Characters at bottom
+        for i in range(self.num_players):
+            p_color = colors[i % 4]
+            # Highlight current turn player
+            if i == self.turn:
+                # If jumping to hit dice
+                if self.dice_stopped and self.rolling_dice:
+                     # Calculate jump pos
+                     p_y = SCREEN_HEIGHT - 100 + dice_y_offset
+                     p_x = SCREEN_WIDTH//2
+                else:
+                     p_y = SCREEN_HEIGHT - 100
+                     p_x = 100 + i * 150
+            else:
+                p_y = SCREEN_HEIGHT - 100
+                p_x = 100 + i * 150
+                
+            pygame.draw.rect(self.screen, p_color, (p_x, p_y, 40, 60))
+            # Eyes
+            pygame.draw.rect(self.screen, WHITE, (p_x + 5, p_y + 10, 10, 10))
+            pygame.draw.rect(self.screen, WHITE, (p_x + 25, p_y + 10, 10, 10))
+            
+            # Indicator for current turn if not jumping
+            if i == self.turn and not (self.dice_stopped and self.rolling_dice):
+                pygame.draw.polygon(self.screen, WHITE, [(p_x + 20, p_y - 20), (p_x + 10, p_y - 40), (p_x + 30, p_y - 40)])
 
     def run(self):
         while self.running:

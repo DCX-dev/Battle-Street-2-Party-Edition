@@ -843,11 +843,226 @@ class CoinMinigame:
         for c in self.coins:
             pygame.draw.circle(self.screen, YELLOW, c.center, 10)
             
+        if self.winner:
+            win_text = self.font.render(self.winner, True, WHITE)
+            self.screen.blit(win_text, (SCREEN_WIDTH//2 - win_text.get_width()//2, SCREEN_HEIGHT//2))
+
+class SnakeMinigame:
+    def __init__(self, screen, font, player_num=1):
+        self.screen = screen
+        self.font = font
+        self.player_num = player_num
+        self.colors = [BLUE, RED, GREEN, YELLOW]
+        self.reset()
+        
+    def reset(self):
+        self.cell_size = 20
+        self.snake = [(SCREEN_WIDTH//2, SCREEN_HEIGHT//2)]
+        self.direction = (1, 0)
+        self.next_direction = (1, 0)
+        self.food = self.spawn_food()
+        self.score = 0
+        self.move_timer = 0
+        self.speed_delay = 5 # Lower is faster
+        self.winner = None
+        self.game_over_timer = 0
+        self.player_color = self.colors[(self.player_num - 1) % 4]
+        
+    def spawn_food(self):
+        while True:
+            x = random.randint(0, (SCREEN_WIDTH//self.cell_size) - 1) * self.cell_size
+            y = random.randint(0, (SCREEN_HEIGHT//self.cell_size) - 1) * self.cell_size
+            if (x, y) not in self.snake:
+                return (x, y)
+                
+    def handle_input(self, keys, joystick=None):
+        if self.winner: return
+        
+        dx, dy = 0, 0
+        if keys[pygame.K_LEFT] and self.direction != (1, 0): self.next_direction = (-1, 0)
+        elif keys[pygame.K_RIGHT] and self.direction != (-1, 0): self.next_direction = (1, 0)
+        elif keys[pygame.K_UP] and self.direction != (0, 1): self.next_direction = (0, -1)
+        elif keys[pygame.K_DOWN] and self.direction != (0, -1): self.next_direction = (0, 1)
+        
+        if joystick:
+            ax = joystick.get_axis(0)
+            ay = joystick.get_axis(1)
+            if abs(ax) > abs(ay):
+                if ax < -0.5 and self.direction != (1, 0): self.next_direction = (-1, 0)
+                elif ax > 0.5 and self.direction != (-1, 0): self.next_direction = (1, 0)
+            else:
+                if ay < -0.5 and self.direction != (0, 1): self.next_direction = (0, -1)
+                elif ay > 0.5 and self.direction != (0, -1): self.next_direction = (0, 1)
+
+    def update(self):
+        if self.winner:
+            self.game_over_timer += 1
+            return self.winner if self.game_over_timer > 180 else None
+            
+        self.move_timer += 1
+        if self.move_timer > self.speed_delay:
+            self.move_timer = 0
+            self.direction = self.next_direction
+            
+            head_x, head_y = self.snake[0]
+            new_head = (head_x + self.direction[0] * self.cell_size, head_y + self.direction[1] * self.cell_size)
+            
+            # Wall Collision
+            if new_head[0] < 0 or new_head[0] >= SCREEN_WIDTH or new_head[1] < 0 or new_head[1] >= SCREEN_HEIGHT:
+                self.winner = f"Game Over! Score: {self.score}"
+                return None
+                
+            # Self Collision
+            if new_head in self.snake:
+                self.winner = f"Game Over! Score: {self.score}"
+                return None
+                
+            self.snake.insert(0, new_head)
+            
+            if new_head == self.food:
+                self.score += 1
+                self.food = self.spawn_food()
+                if self.score >= 10:
+                    self.winner = "You Win!"
+            else:
+                self.snake.pop()
+                
+        return None
+
+    def draw(self):
+        self.screen.fill(BLACK)
+        
+        # Draw Food
+        pygame.draw.rect(self.screen, RED, (self.food[0], self.food[1], self.cell_size, self.cell_size))
+        
+        # Draw Snake
+        for segment in self.snake:
+            pygame.draw.rect(self.screen, self.player_color, (segment[0], segment[1], self.cell_size, self.cell_size))
+            pygame.draw.rect(self.screen, BLACK, (segment[0], segment[1], self.cell_size, self.cell_size), 1)
+            
         # HUD
-        score_text = self.font.render(f"Coins: {self.score}", True, WHITE)
-        time_text = self.font.render(f"Time: {self.timer // 60}", True, WHITE)
+        score_text = self.font.render(f"Score: {self.score}/10", True, WHITE)
         self.screen.blit(score_text, (20, 20))
-        self.screen.blit(time_text, (SCREEN_WIDTH - 200, 20))
+        
+        if self.winner:
+            win_text = self.font.render(self.winner, True, WHITE)
+            self.screen.blit(win_text, (SCREEN_WIDTH//2 - win_text.get_width()//2, SCREEN_HEIGHT//2))
+
+class SpaceShooterMinigame:
+    def __init__(self, screen, font, player_num=1):
+        self.screen = screen
+        self.font = font
+        self.player_num = player_num
+        self.colors = [BLUE, RED, GREEN, YELLOW]
+        self.reset()
+        
+    def reset(self):
+        self.player_rect = pygame.Rect(SCREEN_WIDTH//2, SCREEN_HEIGHT - 60, 40, 40)
+        self.player_color = self.colors[(self.player_num - 1) % 4]
+        self.bullets = []
+        self.enemies = []
+        self.spawn_timer = 0
+        self.score = 0
+        self.lives = 3
+        self.winner = None
+        self.game_over_timer = 0
+        self.shoot_cooldown = 0
+        
+    def handle_input(self, keys, joystick=None):
+        if self.winner: return
+        
+        dx = 0
+        if keys[pygame.K_LEFT]: dx = -1
+        if keys[pygame.K_RIGHT]: dx = 1
+        
+        if joystick:
+            axis = joystick.get_axis(0)
+            if abs(axis) > 0.1: dx = axis
+            
+        self.player_rect.x += dx * 5
+        self.player_rect.clamp_ip(self.screen.get_rect())
+        
+        shoot = False
+        if keys[pygame.K_SPACE]: shoot = True
+        if joystick and joystick.get_button(0): shoot = True
+        
+        if shoot and self.shoot_cooldown == 0:
+            self.bullets.append(pygame.Rect(self.player_rect.centerx - 2, self.player_rect.top, 4, 10))
+            self.shoot_cooldown = 15
+            
+    def update(self):
+        if self.winner:
+            self.game_over_timer += 1
+            return self.winner if self.game_over_timer > 180 else None
+            
+        if self.shoot_cooldown > 0: self.shoot_cooldown -= 1
+        
+        # Spawn Enemies
+        self.spawn_timer += 1
+        if self.spawn_timer > 40:
+            self.enemies.append(pygame.Rect(random.randint(0, SCREEN_WIDTH-30), -30, 30, 30))
+            self.spawn_timer = 0
+            
+        # Update Bullets
+        for b in self.bullets[:]:
+            b.y -= 7
+            if b.y < 0: self.bullets.remove(b)
+            
+        # Update Enemies
+        for e in self.enemies[:]:
+            e.y += 3
+            if e.colliderect(self.player_rect):
+                self.lives -= 1
+                self.enemies.remove(e)
+            elif e.y > SCREEN_HEIGHT:
+                self.enemies.remove(e)
+                # Maybe lose score if missed?
+                
+            # Bullet Collision
+            for b in self.bullets[:]:
+                if b.colliderect(e):
+                    if e in self.enemies: self.enemies.remove(e)
+                    if b in self.bullets: self.bullets.remove(b)
+                    self.score += 1
+                    
+        if self.lives <= 0:
+            self.winner = f"Game Over! Score: {self.score}"
+            
+        if self.score >= 15:
+            self.winner = "Galaxy Saved! Win!"
+            
+        return None
+
+    def draw(self):
+        self.screen.fill(BLACK)
+        
+        # Stars background
+        for _ in range(5):
+            pygame.draw.circle(self.screen, WHITE, (random.randint(0, SCREEN_WIDTH), random.randint(0, SCREEN_HEIGHT)), 1)
+            
+        # Player
+        pygame.draw.polygon(self.screen, self.player_color, [
+            (self.player_rect.centerx, self.player_rect.top),
+            (self.player_rect.left, self.player_rect.bottom),
+            (self.player_rect.right, self.player_rect.bottom)
+        ])
+        
+        # Bullets
+        for b in self.bullets:
+            pygame.draw.rect(self.screen, YELLOW, b)
+            
+        # Enemies
+        for e in self.enemies:
+            pygame.draw.rect(self.screen, RED, e)
+            # Eyes
+            pygame.draw.rect(self.screen, GREEN, (e.x + 5, e.y + 10, 5, 5))
+            pygame.draw.rect(self.screen, GREEN, (e.right - 10, e.y + 10, 5, 5))
+            
+        # HUD
+        score_text = self.font.render(f"Score: {self.score}/15", True, WHITE)
+        lives_text = self.font.render(f"Lives: {self.lives}", True, RED)
+        self.screen.blit(score_text, (20, 20))
+        self.screen.blit(lives_text, (SCREEN_WIDTH - 150, 20))
         
         if self.winner:
             win_text = self.font.render(self.winner, True, WHITE)
