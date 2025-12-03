@@ -61,14 +61,31 @@ class Game:
         self.expansion_enabled = False
         self.load_expansion_config()
         
+    def get_external_path(self, filename):
+        if getattr(sys, 'frozen', False):
+            # If frozen (executable), look in the same directory as the executable
+            application_path = os.path.dirname(sys.executable)
+        else:
+            # If running as script, look in the same directory as main.py
+            application_path = os.path.dirname(os.path.abspath(__file__))
+        
+        return os.path.join(application_path, filename)
+
     def load_expansion_config(self):
-        try:
-            with open(self.resource_path("expansion.json"), "r") as f:
-                config = json.load(f)
-                self.expansion_enabled = config.get("enable_expansion_pack", False)
-        except Exception as e:
-            print(f"Could not load expansion config: {e}")
+        config_path = self.get_external_path("expansion.json")
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, "r") as f:
+                    config = json.load(f)
+                    self.expansion_enabled = config.get("enable_expansion_pack", False)
+                    print(f"Expansion config loaded from {config_path}: {self.expansion_enabled}")
+            except Exception as e:
+                print(f"Error loading expansion config: {e}")
+                self.expansion_enabled = False
+        else:
+            print(f"No expansion config found at {config_path}")
             self.expansion_enabled = False
+        
         self.current_minigame = None
         
         # Multiplayer & Stats
@@ -223,6 +240,9 @@ class Game:
                             self.stop_dice_roll()
         # Continuous input for minigame
         if self.state == GameState.MINIGAME and self.current_minigame:
+            # Re-fetch input for minigame loop
+            keys = pygame.key.get_pressed()
+            active_joystick = next(iter(self.joysticks.values())) if self.joysticks else None
             self.current_minigame.handle_input(keys, active_joystick)
 
     def stop_dice_roll(self):
@@ -230,8 +250,8 @@ class Game:
         self.dice_jump_timer = 0
         
         # Continuous input for minigame
-        if self.state == GameState.MINIGAME and self.current_minigame:
-            self.current_minigame.handle_input(keys, active_joystick)
+        # Not needed here really, only updated in handle_input
+        pass
 
     def reset_game_data(self):
         self.dice_value = 0
