@@ -20,6 +20,7 @@ PURPLE = (128, 0, 128)
 YELLOW = (255, 255, 0)
 ORANGE = (255, 165, 0)
 GREY = (100, 100, 100)
+GOLD = (255, 215, 0)
 
 class GameState:
     SPLASH = "SPLASH"
@@ -676,8 +677,11 @@ class Game:
         self.screen.blit(p4_text, (SCREEN_WIDTH//2 - p4_text.get_width()//2, 500))
         
         if self.expansion_enabled:
-            exp_text = self.tiny_font.render("EXPANSION PACK ENABLED", True, GOLD if 'GOLD' in globals() else (255, 215, 0))
+            exp_text = self.tiny_font.render("EXPANSION PACK ENABLED", True, GOLD)
             self.screen.blit(exp_text, (SCREEN_WIDTH - exp_text.get_width() - 10, 10))
+            
+            games_text = self.tiny_font.render("+ Snake, Space Shooter, Pac-Man", True, GOLD)
+            self.screen.blit(games_text, (SCREEN_WIDTH - games_text.get_width() - 10, 35))
         
         if self.joysticks:
             joy_name = next(iter(self.joysticks.values())).get_name()
