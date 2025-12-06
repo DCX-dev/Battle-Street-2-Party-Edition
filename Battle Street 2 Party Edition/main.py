@@ -39,6 +39,8 @@ class Game:
         self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
         SCREEN_WIDTH, SCREEN_HEIGHT = self.screen.get_size()
         
+        pygame.scrap.init() # Initialize clipboard support
+        
         pygame.display.set_caption("Battle Street 2: Party Edition")
         self.clock = pygame.time.Clock()
         self.running = True
@@ -75,6 +77,7 @@ class Game:
         ]
         self.expansion_message = ""
         self.expansion_message_timer = 0
+        self.nav_cooldown = 0
         
         # Multiplayer & Stats
         self.num_players = 1 # Default 1 player
@@ -265,6 +268,26 @@ class Game:
                         self.keypad_selected_index = (self.keypad_selected_index + 3) % 12
                     elif event.key == pygame.K_SPACE:
                         self.handle_keypad_press()
+                    
+                    # Paste Support (Ctrl+V / Cmd+V)
+                    elif event.key == pygame.K_v and (event.mod & pygame.KMOD_CTRL or event.mod & pygame.KMOD_META):
+                        try:
+                            # Try to get text from clipboard
+                            content = pygame.scrap.get(pygame.SCRAP_TEXT)
+                            if content:
+                                # Content might be bytes
+                                if isinstance(content, bytes):
+                                    text = content.decode('utf-8')
+                                else:
+                                    text = str(content)
+                                
+                                # Filter for digits only (since code is numerical)
+                                digits = "".join([c for c in text if c.isdigit()])
+                                
+                                # Append to code, respecting limit
+                                self.expansion_code = (self.expansion_code + digits)[:12]
+                        except Exception as e:
+                            print(f"Paste error: {e}")
 
                 elif event.type == pygame.JOYBUTTONDOWN:
                     if event.button == 1: # B / Circle - Back
@@ -283,6 +306,25 @@ class Game:
                          self.keypad_selected_index = (self.keypad_selected_index - 3) % 12
                     elif hat[1] == -1: # Down
                          self.keypad_selected_index = (self.keypad_selected_index + 3) % 12
+                
+                # Joystick Axis Navigation
+                elif event.type == pygame.JOYAXISMOTION:
+                    if self.nav_cooldown == 0:
+                        # Axis 0: Left/Right, Axis 1: Up/Down
+                        if event.axis == 0:
+                            if event.value < -0.5:
+                                self.keypad_selected_index = (self.keypad_selected_index - 1) % 12
+                                self.nav_cooldown = 15
+                            elif event.value > 0.5:
+                                self.keypad_selected_index = (self.keypad_selected_index + 1) % 12
+                                self.nav_cooldown = 15
+                        elif event.axis == 1:
+                            if event.value < -0.5:
+                                self.keypad_selected_index = (self.keypad_selected_index - 3) % 12
+                                self.nav_cooldown = 15
+                            elif event.value > 0.5:
+                                self.keypad_selected_index = (self.keypad_selected_index + 3) % 12
+                                self.nav_cooldown = 15
 
             elif self.state == GameState.BOARD:
                 # Trigger Boss Fight if player has 14+ stars
@@ -369,6 +411,10 @@ class Game:
         self.dice_jump_timer = 0
         
     def update(self):
+        # Update navigation cooldown
+        if hasattr(self, 'nav_cooldown') and self.nav_cooldown > 0:
+            self.nav_cooldown -= 1
+            
         if self.state == GameState.SPLASH:
             self.splash_timer += 1
             if self.splash_timer > self.splash_duration:
@@ -616,6 +662,9 @@ class Game:
             
         controls_text = self.tiny_font.render("Controls: Arrows/WASD to Move, Space/Btn 0 to Action", True, WHITE)
         self.screen.blit(controls_text, (SCREEN_WIDTH - controls_text.get_width() - 10, SCREEN_HEIGHT - 30))
+        
+        expansion_hint = self.tiny_font.render("Press + / Start for Expansion Menu", True, WHITE)
+        self.screen.blit(expansion_hint, (SCREEN_WIDTH//2 - expansion_hint.get_width()//2, SCREEN_HEIGHT - 30))
 
     def draw_board(self):
         self.screen.fill((20, 20, 40))
