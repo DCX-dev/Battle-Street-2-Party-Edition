@@ -1244,3 +1244,307 @@ class PacmanMinigame:
         if self.winner:
             win_text = self.font.render(self.winner, True, WHITE)
             self.screen.blit(win_text, (SCREEN_WIDTH//2 - win_text.get_width()//2, SCREEN_HEIGHT//2))
+
+class BlockBreakerMinigame:
+    def __init__(self, screen, font, player_num=1):
+        self.screen = screen
+        self.font = font
+        self.player_num = player_num
+        self.colors = [BLUE, RED, GREEN, YELLOW]
+        self.reset()
+        
+    def reset(self):
+        self.paddle_w = 100
+        self.paddle_h = 15
+        self.player_rect = pygame.Rect(SCREEN_WIDTH//2 - self.paddle_w//2, SCREEN_HEIGHT - 50, self.paddle_w, self.paddle_h)
+        self.player_color = self.colors[(self.player_num - 1) % 4]
+        
+        self.ball_radius = 10
+        self.ball_rect = pygame.Rect(SCREEN_WIDTH//2 - self.ball_radius, SCREEN_HEIGHT - 80, self.ball_radius*2, self.ball_radius*2)
+        self.ball_dx = 5 * random.choice([-1, 1])
+        self.ball_dy = -5
+        
+        self.blocks = []
+        rows = 5
+        cols = 8
+        block_w = SCREEN_WIDTH // cols
+        block_h = 30
+        for r in range(rows):
+            for c in range(cols):
+                self.blocks.append(pygame.Rect(c * block_w + 5, r * block_h + 50, block_w - 10, block_h - 10))
+                
+        self.score = 0
+        self.winner = None
+        self.game_over_timer = 0
+        
+    def handle_input(self, keys, joystick=None):
+        if self.winner: return
+        
+        speed = 8
+        dx = 0
+        if keys[pygame.K_LEFT]: dx = -1
+        elif keys[pygame.K_RIGHT]: dx = 1
+        
+        if joystick:
+            axis = joystick.get_axis(0)
+            if abs(axis) > 0.1: dx = axis
+            
+        self.player_rect.x += dx * speed
+        self.player_rect.clamp_ip(self.screen.get_rect())
+        
+    def update(self):
+        if self.winner:
+            self.game_over_timer += 1
+            return self.winner if self.game_over_timer > 180 else None
+            
+        self.ball_rect.x += self.ball_dx
+        self.ball_rect.y += self.ball_dy
+        
+        # Wall bounce
+        if self.ball_rect.left <= 0 or self.ball_rect.right >= SCREEN_WIDTH:
+            self.ball_dx *= -1
+        if self.ball_rect.top <= 0:
+            self.ball_dy *= -1
+            
+        # Paddle bounce
+        if self.ball_rect.colliderect(self.player_rect):
+            self.ball_dy = -abs(self.ball_dy)
+            # Add some English
+            offset = (self.ball_rect.centerx - self.player_rect.centerx) / (self.paddle_w / 2)
+            self.ball_dx = offset * 8
+            
+        # Block bounce
+        hit_index = self.ball_rect.collidelist(self.blocks)
+        if hit_index != -1:
+            block = self.blocks.pop(hit_index)
+            self.ball_dy *= -1
+            self.score += 10
+            
+        # Lose condition
+        if self.ball_rect.top > SCREEN_HEIGHT:
+            self.winner = f"Game Over! Score: {self.score}"
+            
+        # Win condition
+        if not self.blocks:
+            self.winner = f"You Win! Score: {self.score}"
+            
+        return None
+        
+    def draw(self):
+        self.screen.fill(BLACK)
+        
+        pygame.draw.rect(self.screen, self.player_color, self.player_rect)
+        pygame.draw.circle(self.screen, WHITE, self.ball_rect.center, self.ball_radius)
+        
+        for block in self.blocks:
+            pygame.draw.rect(self.screen, (random.randint(50, 255), random.randint(50, 255), 255), block)
+            
+        score_text = self.font.render(f"Score: {self.score}", True, WHITE)
+        self.screen.blit(score_text, (20, 20))
+        
+        if self.winner:
+            win_text = self.font.render(self.winner, True, WHITE)
+            self.screen.blit(win_text, (SCREEN_WIDTH//2 - win_text.get_width()//2, SCREEN_HEIGHT//2))
+
+class RoadCrosserMinigame:
+    def __init__(self, screen, font, player_num=1):
+        self.screen = screen
+        self.font = font
+        self.player_num = player_num
+        self.colors = [BLUE, RED, GREEN, YELLOW]
+        self.reset()
+        
+    def reset(self):
+        self.player_size = 30
+        self.player_rect = pygame.Rect(SCREEN_WIDTH//2 - self.player_size//2, SCREEN_HEIGHT - 50, self.player_size, self.player_size)
+        self.player_color = self.colors[(self.player_num - 1) % 4]
+        
+        self.lanes = []
+        for i in range(5):
+            y = 100 + i * 80
+            speed = random.choice([-5, -4, -3, 3, 4, 5])
+            self.lanes.append({'y': y, 'speed': speed, 'cars': []})
+            
+        self.spawn_timer = 0
+        self.winner = None
+        self.game_over_timer = 0
+        self.level = 1
+        
+    def handle_input(self, keys, joystick=None):
+        if self.winner: return
+        
+        step = 5
+        if keys[pygame.K_LEFT]: self.player_rect.x -= step
+        if keys[pygame.K_RIGHT]: self.player_rect.x += step
+        if keys[pygame.K_UP]: self.player_rect.y -= step
+        if keys[pygame.K_DOWN]: self.player_rect.y += step
+        
+        if joystick:
+            ax = joystick.get_axis(0)
+            ay = joystick.get_axis(1)
+            if abs(ax) > 0.1: self.player_rect.x += ax * step
+            if abs(ay) > 0.1: self.player_rect.y += ay * step
+            
+        self.player_rect.clamp_ip(self.screen.get_rect())
+        
+    def update(self):
+        if self.winner:
+            self.game_over_timer += 1
+            return self.winner if self.game_over_timer > 180 else None
+            
+        # Spawn cars
+        self.spawn_timer += 1
+        if self.spawn_timer > 60:
+            for lane in self.lanes:
+                if random.random() < 0.3:
+                    x = -50 if lane['speed'] > 0 else SCREEN_WIDTH + 50
+                    width = random.randint(40, 80)
+                    lane['cars'].append(pygame.Rect(x, lane['y'], width, 40))
+            self.spawn_timer = 0
+            
+        # Move cars
+        for lane in self.lanes:
+            for car in lane['cars'][:]:
+                car.x += lane['speed']
+                # Collision
+                if car.colliderect(self.player_rect):
+                    self.winner = "Splat! Game Over!"
+                # Cleanup
+                if (lane['speed'] > 0 and car.x > SCREEN_WIDTH + 50) or (lane['speed'] < 0 and car.x < -100):
+                    lane['cars'].remove(car)
+                    
+        # Win condition (Reach top)
+        if self.player_rect.top < 50:
+            self.winner = f"Level {self.level} Complete!"
+            # Could reset for endless, but simple win for now
+            
+        return None
+        
+    def draw(self):
+        self.screen.fill((50, 50, 50)) # Road grey
+        
+        # Safe zones
+        pygame.draw.rect(self.screen, (30, 100, 30), (0, SCREEN_HEIGHT-60, SCREEN_WIDTH, 60)) # Start
+        pygame.draw.rect(self.screen, (30, 100, 30), (0, 0, SCREEN_WIDTH, 60)) # End
+        
+        # Lanes
+        for lane in self.lanes:
+            pygame.draw.line(self.screen, YELLOW, (0, lane['y'] + 40), (SCREEN_WIDTH, lane['y'] + 40), 2) # Lane divider
+            for car in lane['cars']:
+                pygame.draw.rect(self.screen, RED, car)
+                # Wheels
+                pygame.draw.rect(self.screen, BLACK, (car.x + 5, car.y - 2, 10, 4))
+                pygame.draw.rect(self.screen, BLACK, (car.x + car.width - 15, car.y - 2, 10, 4))
+                pygame.draw.rect(self.screen, BLACK, (car.x + 5, car.bottom - 2, 10, 4))
+                pygame.draw.rect(self.screen, BLACK, (car.x + car.width - 15, car.bottom - 2, 10, 4))
+                
+        pygame.draw.rect(self.screen, self.player_color, self.player_rect)
+        
+        if self.winner:
+            win_text = self.font.render(self.winner, True, WHITE)
+            self.screen.blit(win_text, (SCREEN_WIDTH//2 - win_text.get_width()//2, SCREEN_HEIGHT//2))
+
+class FlappyMinigame:
+    def __init__(self, screen, font, player_num=1):
+        self.screen = screen
+        self.font = font
+        self.player_num = player_num
+        self.colors = [BLUE, RED, GREEN, YELLOW]
+        self.reset()
+        
+    def reset(self):
+        self.player_size = 30
+        self.player_rect = pygame.Rect(100, SCREEN_HEIGHT//2, self.player_size, self.player_size)
+        self.player_color = self.colors[(self.player_num - 1) % 4]
+        self.velocity = 0
+        self.gravity = 0.5
+        self.jump_strength = -8
+        
+        self.pipes = []
+        self.pipe_width = 60
+        self.pipe_gap = 150
+        self.pipe_timer = 0
+        self.pipe_frequency = 100
+        
+        self.score = 0
+        self.winner = None
+        self.game_over_timer = 0
+        
+    def handle_input(self, keys, joystick=None):
+        if self.winner: return
+        
+        jump = False
+        if keys[pygame.K_SPACE] or keys[pygame.K_UP]: jump = True
+        if joystick and joystick.get_button(0): jump = True
+        
+        # Debounce manually or allow spam? Flappy bird allows spam usually but needs release
+        # We'll just add impulse
+        if jump:
+            self.velocity = self.jump_strength
+            
+    def update(self):
+        if self.winner:
+            self.game_over_timer += 1
+            return self.winner if self.game_over_timer > 180 else None
+            
+        # Physics
+        self.velocity += self.gravity
+        self.player_rect.y += int(self.velocity)
+        
+        # Floor/Ceiling
+        if self.player_rect.top < 0 or self.player_rect.bottom > SCREEN_HEIGHT:
+            self.winner = f"Game Over! Score: {self.score}"
+            
+        # Pipes
+        self.pipe_timer += 1
+        if self.pipe_timer > self.pipe_frequency:
+            height = random.randint(50, SCREEN_HEIGHT - self.pipe_gap - 50)
+            self.pipes.append({
+                'top': pygame.Rect(SCREEN_WIDTH, 0, self.pipe_width, height),
+                'bottom': pygame.Rect(SCREEN_WIDTH, height + self.pipe_gap, self.pipe_width, SCREEN_HEIGHT - (height + self.pipe_gap)),
+                'passed': False
+            })
+            self.pipe_timer = 0
+            
+        for pipe in self.pipes[:]:
+            pipe['top'].x -= 3
+            pipe['bottom'].x -= 3
+            
+            # Collision
+            if self.player_rect.colliderect(pipe['top']) or self.player_rect.colliderect(pipe['bottom']):
+                self.winner = f"Game Over! Score: {self.score}"
+                
+            # Score
+            if not pipe['passed'] and pipe['top'].right < self.player_rect.left:
+                self.score += 1
+                pipe['passed'] = True
+                
+            # Cleanup
+            if pipe['top'].right < 0:
+                self.pipes.remove(pipe)
+                
+        if self.score >= 10:
+            self.winner = "You Flew High! Win!"
+            
+        return None
+        
+    def draw(self):
+        self.screen.fill((135, 206, 235)) # Sky blue
+        
+        for pipe in self.pipes:
+            pygame.draw.rect(self.screen, GREEN, pipe['top'])
+            pygame.draw.rect(self.screen, GREEN, pipe['bottom'])
+            # Pipe caps
+            pygame.draw.rect(self.screen, (0, 200, 0), (pipe['top'].x - 2, pipe['top'].bottom - 20, self.pipe_width + 4, 20))
+            pygame.draw.rect(self.screen, (0, 200, 0), (pipe['bottom'].x - 2, pipe['bottom'].top, self.pipe_width + 4, 20))
+            
+        pygame.draw.rect(self.screen, self.player_color, self.player_rect)
+        # Eye
+        pygame.draw.rect(self.screen, WHITE, (self.player_rect.right - 10, self.player_rect.y + 5, 8, 8))
+        
+        score_text = self.font.render(str(self.score), True, WHITE)
+        self.screen.blit(score_text, (SCREEN_WIDTH//2 - score_text.get_width()//2, 50))
+        
+        if self.winner:
+            win_text = self.font.render(self.winner, True, WHITE)
+            self.screen.blit(win_text, (SCREEN_WIDTH//2 - win_text.get_width()//2, SCREEN_HEIGHT//2))

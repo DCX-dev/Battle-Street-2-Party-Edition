@@ -3,7 +3,7 @@ import sys
 import random
 import os
 import json
-from minigames import BattleMinigame, RacingMinigame, PongMinigame, DodgeballMinigame, TargetMinigame, CoinMinigame, BossFightMinigame, SnakeMinigame, SpaceShooterMinigame, PacmanMinigame
+from minigames import BattleMinigame, RacingMinigame, PongMinigame, DodgeballMinigame, TargetMinigame, CoinMinigame, BossFightMinigame, SnakeMinigame, SpaceShooterMinigame, PacmanMinigame, BlockBreakerMinigame, RoadCrosserMinigame, FlappyMinigame
 
 # Constants
 SCREEN_WIDTH = 800
@@ -460,7 +460,7 @@ class Game:
                     # Animate dice rolling rapidly
                     self.dice_timer += 1
                     if self.dice_timer % 5 == 0: # Change face every 5 frames
-                        max_val = 9 if self.expansion_enabled else 6
+                        max_val = 12 if self.expansion_enabled else 6
                         self.dice_value = random.randint(1, max_val)
                         
                     # Check for stop input
@@ -507,6 +507,12 @@ class Game:
                             self.current_minigame = SpaceShooterMinigame(self.screen, self.font, self.turn + 1)
                         elif self.dice_value == 9:
                             self.current_minigame = PacmanMinigame(self.screen, self.font, self.turn + 1)
+                        elif self.dice_value == 10:
+                            self.current_minigame = BlockBreakerMinigame(self.screen, self.font, self.turn + 1)
+                        elif self.dice_value == 11:
+                            self.current_minigame = RoadCrosserMinigame(self.screen, self.font, self.turn + 1)
+                        elif self.dice_value == 12:
+                            self.current_minigame = FlappyMinigame(self.screen, self.font, self.turn + 1)
 
         
         elif self.state == GameState.MINIGAME:
@@ -680,7 +686,7 @@ class Game:
             exp_text = self.tiny_font.render("EXPANSION PACK ENABLED", True, GOLD)
             self.screen.blit(exp_text, (SCREEN_WIDTH - exp_text.get_width() - 10, 10))
             
-            games_text = self.tiny_font.render("+ Snake, Space Shooter, Pac-Man", True, GOLD)
+            games_text = self.tiny_font.render("+ 6 New Games & Golden Dice!", True, GOLD)
             self.screen.blit(games_text, (SCREEN_WIDTH - games_text.get_width() - 10, 35))
         
         if self.joysticks:
@@ -751,6 +757,10 @@ class Game:
         pygame.draw.rect(self.screen, WHITE, draw_rect, border_radius=10)
         pygame.draw.rect(self.screen, BLACK, draw_rect, 4, border_radius=10)
         
+        # Golden Dice Skin if expansion enabled
+        if self.expansion_enabled:
+             pygame.draw.rect(self.screen, GOLD, draw_rect, 4, border_radius=10)
+        
         if self.dice_value > 0:
             # Draw dots based on number
             color = BLACK
@@ -784,6 +794,10 @@ class Game:
             elif self.dice_value == 6: game_name = "COIN COLLECTOR"
             elif self.dice_value == 7: game_name = "SNAKE"
             elif self.dice_value == 8: game_name = "SPACE SHOOTER"
+            elif self.dice_value == 9: game_name = "PAC-MAN"
+            elif self.dice_value == 10: game_name = "BLOCK BREAKER"
+            elif self.dice_value == 11: game_name = "ROAD CROSSER"
+            elif self.dice_value == 12: game_name = "FLAPPY BIRD"
             
             name_text = self.small_font.render(game_name, True, YELLOW)
             self.screen.blit(name_text, (SCREEN_WIDTH//2 - name_text.get_width()//2, SCREEN_HEIGHT//2 + 80))
