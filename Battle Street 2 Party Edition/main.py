@@ -75,6 +75,17 @@ class Game:
         ]
         self.expansion_message = ""
         self.expansion_message_timer = 0
+        
+        # Multiplayer & Stats
+        self.num_players = 1 # Default 1 player
+        self.turn = 0 # 0 = P1, 1 = P2, 2 = P3, 3 = P4
+        self.stars = [0, 0, 0, 0] # Up to 4 players
+        
+        # Splash Data
+        self.splash_timer = 0
+        self.splash_duration = 180 # 3 seconds
+        self.splash_alpha = 255
+        self.splash_image = self.load_studio_logo()
 
     def get_external_path(self, filename):
         if getattr(sys, 'frozen', False):
@@ -111,17 +122,6 @@ class Game:
             print("Expansion config saved.")
         except Exception as e:
             print(f"Error saving expansion config: {e}")
-
-    # Multiplayer & Stats
-        self.num_players = 1 # Default 1 player
-        self.turn = 0 # 0 = P1, 1 = P2, 2 = P3, 3 = P4
-        self.stars = [0, 0, 0, 0] # Up to 4 players
-        
-        # Splash Data
-        self.splash_timer = 0
-        self.splash_duration = 180 # 3 seconds
-        self.splash_alpha = 255
-        self.splash_image = self.load_studio_logo()
 
     def resource_path(self, relative_path):
         """ Get absolute path to resource, works for dev and for PyInstaller """
