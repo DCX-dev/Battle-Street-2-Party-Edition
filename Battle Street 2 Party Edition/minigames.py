@@ -1067,3 +1067,180 @@ class SpaceShooterMinigame:
         if self.winner:
             win_text = self.font.render(self.winner, True, WHITE)
             self.screen.blit(win_text, (SCREEN_WIDTH//2 - win_text.get_width()//2, SCREEN_HEIGHT//2))
+
+class PacmanMinigame:
+    def __init__(self, screen, font, player_num=1):
+        self.screen = screen
+        self.font = font
+        self.player_num = player_num
+        self.colors = [BLUE, RED, GREEN, YELLOW]
+        self.reset()
+        
+    def reset(self):
+        self.cell_size = 40
+        self.rows = SCREEN_HEIGHT // self.cell_size
+        self.cols = SCREEN_WIDTH // self.cell_size
+        self.map = [
+            "WWWWWWWWWWWWWWWWWWWW",
+            "W........W.........W",
+            "W.WW.WWW.W.WWW.WW..W",
+            "W.WW.WWW.W.WWW.WW..W",
+            "W..................W",
+            "W.WW.W.WWWWW.W.WW..W",
+            "W....W...W...W.....W",
+            "WWWW.WWW.W.WWW.WWWWW",
+            "W....W.......W.....W",
+            "W.WW.W.WWWWW.W.WW..W",
+            "W.WW.W.WWWWW.W.WW..W",
+            "W..................W",
+            "W.WW.WWW.W.WWW.WW..W",
+            "W........W.........W",
+            "WWWWWWWWWWWWWWWWWWWW",
+        ]
+        self.walls = []
+        self.dots = []
+        
+        start_pos = (1, 1)
+        
+        for r, row in enumerate(self.map):
+            for c, char in enumerate(row):
+                if char == 'W':
+                    self.walls.append(pygame.Rect(c * self.cell_size, r * self.cell_size, self.cell_size, self.cell_size))
+                elif char == '.':
+                    self.dots.append(pygame.Rect(c * self.cell_size + 15, r * self.cell_size + 15, 10, 10))
+        
+        # Player Setup
+        self.player_rect = pygame.Rect(self.cell_size + 5, self.cell_size + 5, 30, 30)
+        self.player_color = self.colors[(self.player_num - 1) % 4]
+        self.direction = (0, 0)
+        self.next_direction = (0, 0)
+        self.speed = 4
+        
+        # Ghost Setup
+        self.ghosts = [
+            {'rect': pygame.Rect(9 * self.cell_size + 5, 7 * self.cell_size + 5, 30, 30), 'color': RED, 'dir': (1, 0)},
+            {'rect': pygame.Rect(10 * self.cell_size + 5, 7 * self.cell_size + 5, 30, 30), 'color': (255, 184, 255), 'dir': (-1, 0)}, # Pink
+             {'rect': pygame.Rect(9 * self.cell_size + 5, 6 * self.cell_size + 5, 30, 30), 'color': (0, 255, 255), 'dir': (0, 1)} # Cyan
+        ]
+        
+        self.score = 0
+        self.winner = None
+        self.game_over_timer = 0
+        self.lives = 3
+        
+    def handle_input(self, keys, joystick=None):
+        if self.winner: return
+        
+        if keys[pygame.K_LEFT]: self.next_direction = (-1, 0)
+        elif keys[pygame.K_RIGHT]: self.next_direction = (1, 0)
+        elif keys[pygame.K_UP]: self.next_direction = (0, -1)
+        elif keys[pygame.K_DOWN]: self.next_direction = (0, 1)
+        
+        if joystick:
+            ax = joystick.get_axis(0)
+            ay = joystick.get_axis(1)
+            if abs(ax) > abs(ay):
+                if ax < -0.5: self.next_direction = (-1, 0)
+                elif ax > 0.5: self.next_direction = (1, 0)
+            else:
+                if ay < -0.5: self.next_direction = (0, -1)
+                elif ay > 0.5: self.next_direction = (0, 1)
+
+    def can_move(self, rect, direction):
+        test_rect = rect.copy()
+        test_rect.x += direction[0] * self.speed
+        test_rect.y += direction[1] * self.speed
+        for wall in self.walls:
+            if test_rect.colliderect(wall):
+                return False
+        return True
+
+    def update(self):
+        if self.winner:
+            self.game_over_timer += 1
+            return self.winner if self.game_over_timer > 180 else None
+            
+        # Try to change direction if aligned to grid
+        # Center point logic is tricky with smooth movement. 
+        # Simplified: Only change direction if valid.
+        
+        if self.can_move(self.player_rect, self.next_direction):
+            self.direction = self.next_direction
+            
+        if self.can_move(self.player_rect, self.direction):
+            self.player_rect.x += self.direction[0] * self.speed
+            self.player_rect.y += self.direction[1] * self.speed
+            
+        # Collect dots
+        for dot in self.dots[:]:
+            if self.player_rect.colliderect(dot):
+                self.dots.remove(dot)
+                self.score += 10
+                
+        if not self.dots:
+            self.winner = f"Level Clear! Score: {self.score}"
+            
+        # Ghost AI (Simple)
+        for ghost in self.ghosts:
+            # Move
+            if self.can_move(ghost['rect'], ghost['dir']):
+                ghost['rect'].x += ghost['dir'][0] * 2 # Slower than player
+                ghost['rect'].y += ghost['dir'][1] * 2
+            else:
+                # Hit wall, change direction
+                possible_dirs = [(1,0), (-1,0), (0,1), (0,-1)]
+                valid_dirs = [d for d in possible_dirs if self.can_move(ghost['rect'], d)]
+                if valid_dirs:
+                    ghost['dir'] = random.choice(valid_dirs)
+                else:
+                    ghost['dir'] = (-ghost['dir'][0], -ghost['dir'][1]) # Reverse
+            
+            # Randomly change direction at intersections (simplified probability)
+            if random.random() < 0.02:
+                 possible_dirs = [(1,0), (-1,0), (0,1), (0,-1)]
+                 valid_dirs = [d for d in possible_dirs if self.can_move(ghost['rect'], d)]
+                 if valid_dirs:
+                     ghost['dir'] = random.choice(valid_dirs)
+            
+            if ghost['rect'].colliderect(self.player_rect):
+                self.lives -= 1
+                self.player_rect.topleft = (self.cell_size + 5, self.cell_size + 5) # Reset pos
+                self.direction = (0, 0)
+                self.next_direction = (0, 0)
+                if self.lives <= 0:
+                    self.winner = f"Game Over! Score: {self.score}"
+                    
+        return None
+
+    def draw(self):
+        self.screen.fill(BLACK)
+        
+        # Walls
+        for wall in self.walls:
+            pygame.draw.rect(self.screen, BLUE, wall)
+            pygame.draw.rect(self.screen, BLACK, wall.inflate(-4, -4)) # Hollow look
+            
+        # Dots
+        for dot in self.dots:
+            pygame.draw.circle(self.screen, (255, 184, 151), dot.center, 3)
+            
+        # Player
+        pygame.draw.circle(self.screen, self.player_color, self.player_rect.center, 13)
+        # Mouth animation could be added here
+        
+        # Ghosts
+        for ghost in self.ghosts:
+            pygame.draw.circle(self.screen, ghost['color'], ghost['rect'].center, 13)
+            # Eyes
+            pygame.draw.circle(self.screen, WHITE, (ghost['rect'].centerx - 4, ghost['rect'].centery - 4), 3)
+            pygame.draw.circle(self.screen, WHITE, (ghost['rect'].centerx + 4, ghost['rect'].centery - 4), 3)
+
+        # HUD
+        score_text = self.font.render(f"Score: {self.score}", True, WHITE)
+        lives_text = self.font.render(f"Lives: {self.lives}", True, RED)
+        self.screen.blit(score_text, (20, SCREEN_HEIGHT - 30))
+        self.screen.blit(lives_text, (SCREEN_WIDTH - 150, SCREEN_HEIGHT - 30))
+        
+        if self.winner:
+            win_text = self.font.render(self.winner, True, WHITE)
+            self.screen.blit(win_text, (SCREEN_WIDTH//2 - win_text.get_width()//2, SCREEN_HEIGHT//2))

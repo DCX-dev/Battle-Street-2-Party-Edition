@@ -3,7 +3,7 @@ import sys
 import random
 import os
 import json
-from minigames import BattleMinigame, RacingMinigame, PongMinigame, DodgeballMinigame, TargetMinigame, CoinMinigame, BossFightMinigame, SnakeMinigame, SpaceShooterMinigame
+from minigames import BattleMinigame, RacingMinigame, PongMinigame, DodgeballMinigame, TargetMinigame, CoinMinigame, BossFightMinigame, SnakeMinigame, SpaceShooterMinigame, PacmanMinigame
 
 # Constants
 SCREEN_WIDTH = 800
@@ -18,6 +18,8 @@ GREEN = (0, 255, 0)
 BLUE = (0, 0, 255)
 PURPLE = (128, 0, 128)
 YELLOW = (255, 255, 0)
+ORANGE = (255, 165, 0)
+GREY = (100, 100, 100)
 
 class GameState:
     SPLASH = "SPLASH"
@@ -25,6 +27,7 @@ class GameState:
     BOARD = "BOARD"
     MINIGAME = "MINIGAME"
     GAME_OVER = "GAME_OVER"
+    EXPANSION_MENU = "EXPANSION_MENU"
 
 class Game:
     def __init__(self):
@@ -61,6 +64,18 @@ class Game:
         self.expansion_enabled = False
         self.load_expansion_config()
         
+        # Expansion Menu Data
+        self.expansion_code = ""
+        self.keypad_selected_index = 0
+        self.keypad_grid = [
+            '1', '2', '3',
+            '4', '5', '6',
+            '7', '8', '9',
+            'CLR', '0', 'ENT'
+        ]
+        self.expansion_message = ""
+        self.expansion_message_timer = 0
+
     def get_external_path(self, filename):
         if getattr(sys, 'frozen', False):
             # If frozen (executable), look in the same directory as the executable
@@ -88,7 +103,16 @@ class Game:
         
         self.current_minigame = None
         
-        # Multiplayer & Stats
+    def save_expansion_config(self):
+        config_path = self.get_external_path("expansion.json")
+        try:
+            with open(config_path, "w") as f:
+                json.dump({"enable_expansion_pack": self.expansion_enabled}, f)
+            print("Expansion config saved.")
+        except Exception as e:
+            print(f"Error saving expansion config: {e}")
+
+    # Multiplayer & Stats
         self.num_players = 1 # Default 1 player
         self.turn = 0 # 0 = P1, 1 = P2, 2 = P3, 3 = P4
         self.stars = [0, 0, 0, 0] # Up to 4 players
@@ -183,6 +207,10 @@ class Game:
                         self.state = GameState.BOARD
                         self.num_players = 4
                         self.reset_game_data()
+                    elif event.key == pygame.K_PLUS or event.key == pygame.K_EQUALS: # Plus key
+                        self.state = GameState.EXPANSION_MENU
+                        self.expansion_code = ""
+                        self.expansion_message = ""
                         
                 elif event.type == pygame.JOYBUTTONDOWN:
                     if event.button == 0: # A / Cross (1P)
@@ -202,12 +230,60 @@ class Game:
                          self.state = GameState.BOARD
                          self.num_players = 4
                          self.reset_game_data()
+                    elif event.button == 9 or event.button == 7: # Start/Options usually around 9 or 7
+                         self.state = GameState.EXPANSION_MENU
+                         self.expansion_code = ""
+                         self.expansion_message = ""
 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     self.state = GameState.BOARD
                     self.num_players = 1
                     self.reset_game_data()
             
+            elif self.state == GameState.EXPANSION_MENU:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE or event.key == pygame.K_b:
+                        self.state = GameState.TITLE
+                    
+                    # Number input
+                    if event.unicode.isdigit():
+                        if len(self.expansion_code) < 12:
+                             self.expansion_code += event.unicode
+                    elif event.key == pygame.K_BACKSPACE:
+                        self.expansion_code = self.expansion_code[:-1]
+                    elif event.key == pygame.K_RETURN:
+                         self.check_expansion_code()
+                         
+                    # Navigation
+                    if event.key == pygame.K_LEFT:
+                        self.keypad_selected_index = (self.keypad_selected_index - 1) % 12
+                    elif event.key == pygame.K_RIGHT:
+                        self.keypad_selected_index = (self.keypad_selected_index + 1) % 12
+                    elif event.key == pygame.K_UP:
+                        self.keypad_selected_index = (self.keypad_selected_index - 3) % 12
+                    elif event.key == pygame.K_DOWN:
+                        self.keypad_selected_index = (self.keypad_selected_index + 3) % 12
+                    elif event.key == pygame.K_SPACE:
+                        self.handle_keypad_press()
+
+                elif event.type == pygame.JOYBUTTONDOWN:
+                    if event.button == 1: # B / Circle - Back
+                         self.state = GameState.TITLE
+                    elif event.button == 0: # A / Cross - Select
+                         self.handle_keypad_press()
+                         
+                # Joyhat/Axis for navigation (simple D-pad support)
+                elif event.type == pygame.JOYHATMOTION:
+                    hat = event.value
+                    if hat[0] == -1: # Left
+                         self.keypad_selected_index = (self.keypad_selected_index - 1) % 12
+                    elif hat[0] == 1: # Right
+                         self.keypad_selected_index = (self.keypad_selected_index + 1) % 12
+                    elif hat[1] == 1: # Up
+                         self.keypad_selected_index = (self.keypad_selected_index - 3) % 12
+                    elif hat[1] == -1: # Down
+                         self.keypad_selected_index = (self.keypad_selected_index + 3) % 12
+
             elif self.state == GameState.BOARD:
                 # Trigger Boss Fight if player has 14+ stars
                 if self.stars[self.turn] >= 14:
@@ -245,6 +321,26 @@ class Game:
             active_joystick = next(iter(self.joysticks.values())) if self.joysticks else None
             self.current_minigame.handle_input(keys, active_joystick)
 
+    def handle_keypad_press(self):
+        char = self.keypad_grid[self.keypad_selected_index]
+        if char.isdigit():
+            if len(self.expansion_code) < 12:
+                self.expansion_code += char
+        elif char == 'CLR':
+            self.expansion_code = ""
+        elif char == 'ENT':
+            self.check_expansion_code()
+            
+    def check_expansion_code(self):
+        # Code: 56373849367
+        if self.expansion_code == "56373849367":
+            self.expansion_enabled = True
+            self.expansion_message = "EXPANSION PACK ACTIVATED!"
+            self.save_expansion_config()
+        else:
+            self.expansion_message = "INVALID CODE"
+        self.expansion_message_timer = 120 # 2 seconds
+
     def stop_dice_roll(self):
         self.dice_stopped = True
         self.dice_jump_timer = 0
@@ -278,13 +374,19 @@ class Game:
             if self.splash_timer > self.splash_duration:
                  self.state = GameState.TITLE
         
+        elif self.state == GameState.EXPANSION_MENU:
+            if self.expansion_message_timer > 0:
+                self.expansion_message_timer -= 1
+                if self.expansion_message_timer == 0 and self.expansion_enabled:
+                    self.state = GameState.TITLE
+
         elif self.state == GameState.BOARD:
             if self.rolling_dice:
                 if not self.dice_stopped:
                     # Animate dice rolling rapidly
                     self.dice_timer += 1
                     if self.dice_timer % 5 == 0: # Change face every 5 frames
-                        max_val = 8 if self.expansion_enabled else 6
+                        max_val = 9 if self.expansion_enabled else 6
                         self.dice_value = random.randint(1, max_val)
                         
                     # Check for stop input
@@ -329,6 +431,8 @@ class Game:
                             self.current_minigame = SnakeMinigame(self.screen, self.font, self.turn + 1)
                         elif self.dice_value == 8:
                             self.current_minigame = SpaceShooterMinigame(self.screen, self.font, self.turn + 1)
+                        elif self.dice_value == 9:
+                            self.current_minigame = PacmanMinigame(self.screen, self.font, self.turn + 1)
 
         
         elif self.state == GameState.MINIGAME:
@@ -374,6 +478,8 @@ class Game:
             self.draw_splash()
         elif self.state == GameState.TITLE:
             self.draw_title()
+        elif self.state == GameState.EXPANSION_MENU:
+            self.draw_expansion_menu()
         elif self.state == GameState.BOARD:
             self.draw_board()
         elif self.state == GameState.MINIGAME:
@@ -383,6 +489,54 @@ class Game:
             self.draw_game_over()
             
         pygame.display.flip()
+
+    def draw_expansion_menu(self):
+        self.screen.fill(BLACK)
+        
+        # Title
+        title = self.font.render("ENTER EXPANSION CODE", True, YELLOW)
+        self.screen.blit(title, (SCREEN_WIDTH//2 - title.get_width()//2, 50))
+        
+        # Code Display (Masked or Clear - user said "type in expansion code", usually visible)
+        # Using simple box
+        pygame.draw.rect(self.screen, WHITE, (SCREEN_WIDTH//2 - 200, 150, 400, 50), 2)
+        code_text = self.font.render(self.expansion_code, True, WHITE)
+        self.screen.blit(code_text, (SCREEN_WIDTH//2 - code_text.get_width()//2, 160))
+        
+        # Keypad Grid
+        start_x = SCREEN_WIDTH//2 - 100
+        start_y = 250
+        cell_size = 60
+        gap = 10
+        
+        for i, char in enumerate(self.keypad_grid):
+            row = i // 3
+            col = i % 3
+            x = start_x + col * (cell_size + gap)
+            y = start_y + row * (cell_size + gap)
+            
+            rect = pygame.Rect(x, y, cell_size, cell_size)
+            
+            # Highlight selected
+            if i == self.keypad_selected_index:
+                pygame.draw.rect(self.screen, YELLOW, rect)
+                text_color = BLACK
+            else:
+                pygame.draw.rect(self.screen, BLUE, rect, 2)
+                text_color = WHITE
+                
+            text = self.small_font.render(char, True, text_color)
+            self.screen.blit(text, (x + cell_size//2 - text.get_width()//2, y + cell_size//2 - text.get_height()//2))
+            
+        # Message
+        if self.expansion_message:
+            color = GREEN if "ACTIVATED" in self.expansion_message else RED
+            msg = self.small_font.render(self.expansion_message, True, color)
+            self.screen.blit(msg, (SCREEN_WIDTH//2 - msg.get_width()//2, 500))
+            
+        # Instructions
+        instr = self.tiny_font.render("Use D-Pad/Arrows to Move, A/Space to Select, B/Esc to Back", True, GREY if 'GREY' in globals() else (100,100,100))
+        self.screen.blit(instr, (SCREEN_WIDTH//2 - instr.get_width()//2, SCREEN_HEIGHT - 30))
 
     def draw_game_over(self):
         self.screen.fill(BLUE)
@@ -447,6 +601,10 @@ class Game:
         self.screen.blit(p2_text, (SCREEN_WIDTH//2 - p2_text.get_width()//2, 420))
         self.screen.blit(p3_text, (SCREEN_WIDTH//2 - p3_text.get_width()//2, 460))
         self.screen.blit(p4_text, (SCREEN_WIDTH//2 - p4_text.get_width()//2, 500))
+        
+        if self.expansion_enabled:
+            exp_text = self.tiny_font.render("EXPANSION PACK ENABLED", True, GOLD if 'GOLD' in globals() else (255, 215, 0))
+            self.screen.blit(exp_text, (SCREEN_WIDTH - exp_text.get_width() - 10, 10))
         
         if self.joysticks:
             joy_name = next(iter(self.joysticks.values())).get_name()
