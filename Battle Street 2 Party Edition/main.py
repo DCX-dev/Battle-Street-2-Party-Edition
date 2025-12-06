@@ -269,23 +269,50 @@ class Game:
                     elif event.key == pygame.K_SPACE:
                         self.handle_keypad_press()
                     
+                    # Copy Support (Ctrl+C / Cmd+C)
+                    elif event.key == pygame.K_c and (event.mod & pygame.KMOD_CTRL or event.mod & pygame.KMOD_META):
+                        try:
+                            text_to_copy = self.expansion_code
+                            if text_to_copy:
+                                pygame.scrap.put(pygame.SCRAP_TEXT, text_to_copy.encode('utf-8'))
+                                print(f"Copied to clipboard: {text_to_copy}")
+                        except Exception as e:
+                            print(f"Copy error: {e}")
+
                     # Paste Support (Ctrl+V / Cmd+V)
                     elif event.key == pygame.K_v and (event.mod & pygame.KMOD_CTRL or event.mod & pygame.KMOD_META):
                         try:
-                            # Try to get text from clipboard
+                            # Try multiple formats for better compatibility
+                            content = None
+                            # Standard text
                             content = pygame.scrap.get(pygame.SCRAP_TEXT)
+                            # Mac specific sometimes
+                            if not content:
+                                content = pygame.scrap.get("text/plain;charset=utf-8")
+                            if not content:
+                                content = pygame.scrap.get("public.utf8-plain-text")
+                                
                             if content:
                                 # Content might be bytes
                                 if isinstance(content, bytes):
-                                    text = content.decode('utf-8')
+                                    text = content.decode('utf-8', errors='ignore') # Ignore bad chars
                                 else:
                                     text = str(content)
+                                
+                                # Strip null bytes if any
+                                text = text.replace('\x00', '')
                                 
                                 # Filter for digits only (since code is numerical)
                                 digits = "".join([c for c in text if c.isdigit()])
                                 
-                                # Append to code, respecting limit
-                                self.expansion_code = (self.expansion_code + digits)[:12]
+                                if digits:
+                                    # Append to code, respecting limit
+                                    self.expansion_code = (self.expansion_code + digits)[:12]
+                                    print(f"Pasted: {digits}")
+                                else:
+                                    print("Clipboard content contained no digits.")
+                            else:
+                                print("No text content found in clipboard.")
                         except Exception as e:
                             print(f"Paste error: {e}")
 
